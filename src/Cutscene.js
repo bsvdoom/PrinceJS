@@ -151,6 +151,10 @@ PrinceJS.Cutscene.prototype = {
     }
   },
 
+  preRender: function () {
+    this.stage.updateTransform();
+  },
+
   updateScene: function () {
     if (this.sceneState === PrinceJS.Cutscene.STATE_RUNNING) {
       return;

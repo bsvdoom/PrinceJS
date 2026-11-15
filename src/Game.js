@@ -190,6 +190,10 @@ PrinceJS.Game.prototype = {
     this.firstUpdate = false;
   },
 
+  preRender: function () {
+    this.stage.updateTransform();
+  },
+
   checkLevelLogic: function () {
     if (!this.specialEvents) {
       return;
@@ -746,6 +750,7 @@ PrinceJS.Game.prototype = {
     if (this.level.rooms[room]) {
       this.game.camera.x = this.level.rooms[room].x * PrinceJS.SCREEN_WIDTH * PrinceJS.SCALE_FACTOR;
       this.game.camera.y = this.level.rooms[room].y * PrinceJS.ROOM_HEIGHT * PrinceJS.SCALE_FACTOR;
+      this.world.position.set(-this.game.camera.x, -this.game.camera.y);
       this.checkForOpponent(room);
       this.level.checkGates(room, this.currentCameraRoom);
       this.currentCameraRoom = room;
