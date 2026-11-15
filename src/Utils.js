@@ -318,15 +318,14 @@ PrinceJS.Utils = {
   },
 
   adjustRemainingMinutes: function (deltaMinutes) {
-    let now = Date.now();
+    let refTime = PrinceJS.endTime ? PrinceJS.endTime.getTime() : Date.now();
     if (!PrinceJS.startTime) {
-      PrinceJS.startTime = new Date(now - (60 - (PrinceJS.minutes || 60)) * 60000);
+      PrinceJS.startTime = new Date(refTime - (60 - (PrinceJS.minutes || 60)) * 60000);
     }
-    let minStart = now - 59 * 60000;
-    let maxStart = now;
+    let minStart = refTime - 59 * 60000;
+    let maxStart = refTime;
     let nextStart = Math.min(maxStart, Math.max(minStart, PrinceJS.startTime.getTime() + deltaMinutes * 60000));
     PrinceJS.startTime = new Date(nextStart);
-    PrinceJS.endTime = undefined;
     PrinceJS.Utils.updateQuery();
     return PrinceJS.Utils.getRemainingMinutes();
   },
@@ -543,7 +542,11 @@ PrinceJS.Utils = {
         return false;
       }
       let data = JSON.parse(raw);
-      if (!data || typeof data.level !== "number" || !((data.level >= 1 && data.level <= 14) || data.level >= 90)) {
+      if (
+        !data ||
+        !Number.isInteger(data.level) ||
+        !((data.level >= 1 && data.level <= 14) || (data.level >= 90 && data.level <= 999))
+      ) {
         return false;
       }
       let maxHealth =

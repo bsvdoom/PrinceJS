@@ -287,6 +287,9 @@ PrinceJS.Interface.prototype = {
   },
 
   showNotice: function (text) {
+    if (["continue", "paused"].includes(this.showTextType)) {
+      return;
+    }
     this.showText(text, "notice");
     this.hideTextTimer = 30;
   },

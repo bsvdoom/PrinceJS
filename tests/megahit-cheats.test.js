@@ -33,6 +33,7 @@ function loadContext(search = "", files = ["src/Boot.js", "src/Utils.js", "src/G
     Phaser: {
       Sprite: function () {},
       Rectangle: function () {},
+      Easing: { Linear: { None: () => {} } },
       Keyboard: {
         R: 82,
         A: 65,
@@ -263,7 +264,14 @@ test("megahit cheats: reviveKid, killOpponentCheat, addLifeCheatEvent, and float
 });
 
 test("Kid.revive restores alive state, full health, and safe room when out of bounds", () => {
-  const { PrinceJS } = loadContext("", ["src/Boot.js", "src/Utils.js", "src/Actor.js", "src/Fighter.js", "src/Kid.js"]);
+  const { PrinceJS } = loadContext("", [
+    "src/Boot.js",
+    "src/Utils.js",
+    "src/Level.js",
+    "src/Actor.js",
+    "src/Fighter.js",
+    "src/Kid.js"
+  ]);
 
   let changedRoom = null;
   let reviveDispatched = 0;
@@ -336,18 +344,20 @@ test("Kid.revive restores alive state, full health, and safe room when out of bo
   assert.equal(reviveDispatched, 1);
 });
 
-test("Round 2 cheats: flipScreen, room info, H/J/U/N camera peek, SPACE snap-back, and +/- time adjust", () => {
+test("camera peek, room info, screen flip, and time adjust cheats preserve game room and frozen endTime", () => {
   const { PrinceJS } = loadContext();
   PrinceJS.megahit = true;
   PrinceJS.startTime = new Date(Date.now() - 10 * 60000);
 
   let flipped = 0;
-  let cameraRoom = 1;
+  let cameraPosRoom = 1;
+  let setupCameraCalls = 0;
   let notice = null;
   let shownMinutes = 0;
 
   const fakeGame = {
     currentCameraRoom: 1,
+    peekRoom: null,
     kid: {
       room: 1,
       flipScreen() {
@@ -370,9 +380,11 @@ test("Round 2 cheats: flipScreen, room info, H/J/U/N camera peek, SPACE snap-bac
         shownMinutes++;
       }
     },
-    setupCamera(room) {
-      cameraRoom = room;
-      this.currentCameraRoom = room;
+    setCameraPosition(room) {
+      cameraPosRoom = room;
+    },
+    setupCamera() {
+      setupCameraCalls++;
     }
   };
 
@@ -387,14 +399,22 @@ test("Round 2 cheats: flipScreen, room info, H/J/U/N camera peek, SPACE snap-bac
   PrinceJS.Game.prototype.showRoomInfoCheatEvent.call(fakeGame, { shiftKey: true, ctrlKey: false, altKey: false });
   assert.equal(notice, "ROOM 1 L2 R3 U4 D-");
 
-  // H / J / U / N peek adjacent rooms
+  // H peeks left room without calling setupCamera or mutating currentCameraRoom
   PrinceJS.Game.prototype.peekRoomLeftCheatEvent.call(fakeGame, { shiftKey: false, ctrlKey: false, altKey: false });
-  assert.equal(cameraRoom, 2);
+  assert.equal(cameraPosRoom, 2);
+  assert.equal(fakeGame.peekRoom, 2);
+  assert.equal(fakeGame.currentCameraRoom, 1);
+  assert.equal(setupCameraCalls, 0);
   assert.equal(notice, "ROOM 2");
 
-  // SPACE returns camera to Kid's room and shows remaining minutes
+  // Shift+C while peeking shows peeked room links
+  PrinceJS.Game.prototype.showRoomInfoCheatEvent.call(fakeGame, { shiftKey: true, ctrlKey: false, altKey: false });
+  assert.equal(notice, "ROOM 2 L- R1 U- D-");
+
+  // SPACE snaps back to currentCameraRoom and shows remaining minutes
   PrinceJS.Game.prototype.showRemainingMinutes.call(fakeGame, true);
-  assert.equal(cameraRoom, 1);
+  assert.equal(cameraPosRoom, 1);
+  assert.equal(fakeGame.peekRoom, null);
   assert.equal(shownMinutes, 1);
 
   // + / - adjusts remaining minutes and clamps between 1 and 60
@@ -406,4 +426,144 @@ test("Round 2 cheats: flipScreen, room info, H/J/U/N camera peek, SPACE snap-bac
   assert.equal(clampedMax, 60);
   const clampedMin = PrinceJS.Utils.adjustRemainingMinutes(-100);
   assert.equal(clampedMin, 1);
+
+  // Frozen endTime is preserved across +/- time adjustment
+  const frozenEnd = new Date(Date.now() - 5 * 60000);
+  PrinceJS.endTime = frozenEnd;
+  PrinceJS.startTime = new Date(frozenEnd.getTime() - 10 * 60000);
+  const adjustedFrozen = PrinceJS.Utils.adjustRemainingMinutes(-1);
+  assert.equal(adjustedFrozen, 49);
+  assert.equal(PrinceJS.endTime, frozenEnd);
+});
+
+test("Kid.revive moves back to lastSafeRoom when dying on spikes or chopper", () => {
+  const { PrinceJS } = loadContext("", [
+    "src/Boot.js",
+    "src/Utils.js",
+    "src/Level.js",
+    "src/Actor.js",
+    "src/Fighter.js",
+    "src/Kid.js"
+  ]);
+
+  const fakeKid = {
+    alive: false,
+    room: 5,
+    spawnRoom: 1,
+    spawnX: 50,
+    spawnY: 116,
+    lastSafeRoom: 4,
+    lastSafeX: 70,
+    lastSafeY: 116,
+    charX: 90,
+    charY: 116,
+    charBlockX: 6,
+    charBlockY: 1,
+    health: 0,
+    maxHealth: 3,
+    swordDrawn: false,
+    inJumpUp: false,
+    inFallDown: false,
+    fallingBlocks: 0,
+    charXVel: 0,
+    charYVel: 0,
+    actionCode: 1,
+    ledgeSwing: 0,
+    action: "impale",
+    level: {
+      rooms: {
+        4: { x: 0, y: 0 },
+        5: { x: 1, y: 0 }
+      },
+      getTileAt: () => ({ element: PrinceJS.Level.TILE_SPIKES, roomY: 1 })
+    },
+    updateBlockXY() {},
+    alignToFloor() {},
+    updateBase() {},
+    processCommand() {},
+    updateCharPosition() {},
+    updateSwordPosition() {},
+    maskAndCrop() {},
+    onChangeRoom: { dispatch() {} },
+    onRevive: { dispatch() {} }
+  };
+
+  const result = PrinceJS.Kid.prototype.revive.call(fakeKid);
+  assert.equal(result, true);
+  assert.equal(fakeKid.room, 4);
+  assert.equal(fakeKid.charX, 70);
+  assert.equal(fakeKid.action, "stand");
+});
+
+test("Title Ctrl+L only intercepts and loads when megahit is enabled, and loadGame validates integer levels", () => {
+  const listeners = {};
+  const { PrinceJS, localStorage } = loadContext("", ["src/Boot.js", "src/Utils.js", "src/Title.js"]);
+
+  // Verify loadGame validation rejects non-integer and out-of-range levels
+  localStorage.setItem(PrinceJS.Utils.SAVE_KEY, JSON.stringify({ level: 1.5, health: 3, maxHealth: 3, elapsedMs: 0 }));
+  assert.equal(PrinceJS.Utils.loadGame(), false);
+  localStorage.setItem(PrinceJS.Utils.SAVE_KEY, JSON.stringify({ level: 1200, health: 3, maxHealth: 3, elapsedMs: 0 }));
+  assert.equal(PrinceJS.Utils.loadGame(), false);
+
+  PrinceJS.currentLevel = 4;
+  PrinceJS.Utils.saveGame({ health: 4, maxHealth: 4 });
+  PrinceJS.currentLevel = 1;
+
+  let played = 0;
+  let prevented = 0;
+
+  const titleState = {
+    input: { keyboard: {} },
+    game: {
+      world: { setBounds() {} },
+      sound: { stopAll() {} },
+      add: {
+        image: () => ({ alpha: 0, anchor: { setTo() {} }, visible: false, crop() {}, updateCrop() {} }),
+        tween: () => ({
+          to() {
+            return this;
+          },
+          onComplete: { add() {} }
+        })
+      }
+    },
+    world: { centerX: 160, centerY: 100, height: 200 },
+    stopMusic() {},
+    play() {
+      played++;
+    }
+  };
+
+  // Capture handler from Title.create using a temporary window mock inside vm?
+  // Instead, reuse loadContext's window by checking Title.create + shutdown directly:
+  const fakeEvent = {
+    ctrlKey: true,
+    shiftKey: false,
+    altKey: false,
+    metaKey: false,
+    key: "l",
+    keyCode: 76,
+    preventDefault() {
+      prevented++;
+    },
+    stopImmediatePropagation() {}
+  };
+
+  PrinceJS.Title.prototype.create.call(titleState);
+  assert.equal(typeof titleState._cheatKeydownHandler, "function");
+
+  PrinceJS.megahit = false;
+  titleState._cheatKeydownHandler(fakeEvent);
+  assert.equal(prevented, 0);
+  assert.equal(played, 0);
+
+  PrinceJS.megahit = true;
+  titleState._cheatKeydownHandler(fakeEvent);
+  assert.equal(prevented, 1);
+  assert.equal(played, 1);
+  assert.equal(PrinceJS.currentLevel, 4);
+
+  PrinceJS.Title.prototype.shutdown.call(titleState);
+  assert.equal(titleState._cheatKeydownHandler, null);
+  assert.deepEqual(listeners, {});
 });

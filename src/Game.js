@@ -114,6 +114,7 @@ PrinceJS.Game.prototype = {
     this.visitedRooms = {};
     this.currentRoom = json.prince.room;
     this.blockCamera = false;
+    this.peekRoom = null;
 
     this.world.sort("z");
     this.world.alpha = 1;
@@ -156,9 +157,11 @@ PrinceJS.Game.prototype = {
       } else if (!event.ctrlKey && !event.altKey && !event.metaKey) {
         if (event.key === "+" || event.keyCode === 107) {
           event.preventDefault();
+          event.stopImmediatePropagation();
           this.adjustTimeCheat(1);
         } else if (event.key === "-" || event.keyCode === 109) {
           event.preventDefault();
+          event.stopImmediatePropagation();
           this.adjustTimeCheat(-1);
         }
       }
@@ -611,8 +614,9 @@ PrinceJS.Game.prototype = {
   },
 
   showRemainingMinutes: function (force) {
-    if (PrinceJS.megahit && this.kid && this.kid.room > 0 && this.currentCameraRoom !== this.kid.room) {
-      this.setupCamera(this.kid.room);
+    if (PrinceJS.megahit && this.peekRoom) {
+      this.peekRoom = null;
+      this.setCameraPosition(this.currentCameraRoom);
     }
     this.ui.showRemainingMinutes(force);
   },
@@ -721,6 +725,9 @@ PrinceJS.Game.prototype = {
     if (!this.kid || this.kid.alive || !this.kid.revive()) {
       return false;
     }
+    if (this.game && this.game.sound) {
+      this.game.sound.stopAll();
+    }
     this.continueTimer = -1;
     this.pressButtonToContinueTimer = -1;
     if (this.ui) {
@@ -758,7 +765,7 @@ PrinceJS.Game.prototype = {
     if (!PrinceJS.megahit || !event.shiftKey || event.ctrlKey || event.altKey || (event.event && event.event.metaKey)) {
       return;
     }
-    let room = this.currentCameraRoom;
+    let room = this.peekRoom || this.currentCameraRoom;
     let links = (this.level && this.level.rooms[room] && this.level.rooms[room].links) || {};
     let fmt = (id) => (id > 0 ? id : "-");
     if (this.ui) {
@@ -797,13 +804,15 @@ PrinceJS.Game.prototype = {
   },
 
   peekRoomCheat: function (direction) {
-    let current = this.level && this.level.rooms[this.currentCameraRoom];
+    let fromRoom = this.peekRoom || this.currentCameraRoom;
+    let current = this.level && this.level.rooms[fromRoom];
     if (!current || !current.links) {
       return false;
     }
     let targetRoom = current.links[direction];
     if (targetRoom > 0 && this.level.rooms[targetRoom]) {
-      this.setupCamera(targetRoom);
+      this.peekRoom = targetRoom;
+      this.setCameraPosition(targetRoom);
       if (this.ui) {
         this.ui.showNotice("ROOM " + targetRoom);
       }
@@ -950,12 +959,21 @@ PrinceJS.Game.prototype = {
   },
 
   changeRoom: function (room, cameraRoom) {
+    this.peekRoom = null;
     this.setupCamera(room, cameraRoom);
     if (this.currentRoom === room) {
       return;
     }
     this.currentRoom = room;
     this.kid.flee = false;
+  },
+
+  setCameraPosition: function (room) {
+    if (this.level && this.level.rooms[room]) {
+      this.game.camera.x = this.level.rooms[room].x * PrinceJS.SCREEN_WIDTH * PrinceJS.SCALE_FACTOR;
+      this.game.camera.y = this.level.rooms[room].y * PrinceJS.ROOM_HEIGHT * PrinceJS.SCALE_FACTOR;
+      this.world.position.set(-this.game.camera.x, -this.game.camera.y);
+    }
   },
 
   setupCamera: function (room, cameraRoom) {
@@ -971,9 +989,7 @@ PrinceJS.Game.prototype = {
     }
     room = cameraRoom || room;
     if (this.level.rooms[room]) {
-      this.game.camera.x = this.level.rooms[room].x * PrinceJS.SCREEN_WIDTH * PrinceJS.SCALE_FACTOR;
-      this.game.camera.y = this.level.rooms[room].y * PrinceJS.ROOM_HEIGHT * PrinceJS.SCALE_FACTOR;
-      this.world.position.set(-this.game.camera.x, -this.game.camera.y);
+      PrinceJS.Game.prototype.setCameraPosition.call(this, room);
       this.checkForOpponent(room);
       this.level.checkGates(room, this.currentCameraRoom);
       this.currentCameraRoom = room;

@@ -1804,7 +1804,12 @@ PrinceJS.Kid.prototype.revive = function () {
     this.room <= 0 ||
     !this.level.rooms[this.room] ||
     !currentTile ||
-    currentTile.element === PrinceJS.Level.TILE_SPACE
+    [
+      PrinceJS.Level.TILE_SPACE,
+      PrinceJS.Level.TILE_SPIKES,
+      PrinceJS.Level.TILE_CHOPPER,
+      PrinceJS.Level.TILE_LOOSE_BOARD
+    ].includes(currentTile.element)
   ) {
     this.room = this.lastSafeRoom || this.spawnRoom;
     this.charX = this.lastSafeX !== undefined ? this.lastSafeX : this.spawnX;

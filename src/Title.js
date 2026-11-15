@@ -55,7 +55,7 @@ PrinceJS.Title.prototype = {
     this.input.keyboard.onDownCallback = this.play.bind(this);
 
     this._cheatKeydownHandler = (event) => {
-      if ((PrinceJS.megahit || PrinceJS.Utils.hasSavedGame()) && PrinceJS.Utils.isCtrlKeyShortcut(event, "l", 76)) {
+      if (PrinceJS.megahit && PrinceJS.Utils.isCtrlKeyShortcut(event, "l", 76)) {
         event.preventDefault();
         event.stopImmediatePropagation();
         if (PrinceJS.Utils.loadGame()) {

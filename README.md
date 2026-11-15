@@ -97,7 +97,7 @@ Cheat shortcuts (with `megahit=true` or toggled in-game via `Shift+M`):
 - `Shift+M`: Toggle Megahit cheat mode
 - `Ctrl+G`: Save game state (`localStorage`)
 - `Ctrl+L`: Load saved game state (works on Title screen and in-game)
-- `Shift+L`: Skip to next level (all levels, keeps remaining time; without `megahit`, levels 1-3 only and caps time at 15 min)
+- `Shift+L`: Skip to next level (all levels, keeps remaining time; without `megahit`, up to level 4 only and caps time at 15 min)
 - `Shift+T`: Extra health bottle and full heal
 - `K`: Kill current opponent on screen
 - `R`: Revive Prince when dead
