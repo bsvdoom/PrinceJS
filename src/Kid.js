@@ -31,6 +31,26 @@ PrinceJS.Kid = function (game, level, location, direction, room) {
 
   this.cursors = this.game.input.keyboard.createCursorKeys();
   this.shiftKey = this.game.input.keyboard.addKey(Phaser.Keyboard.SHIFT);
+  this.navKeys = {};
+  const navKeyCodes = {
+    home: Phaser.Keyboard.HOME,
+    pageUp: Phaser.Keyboard.PAGE_UP,
+    end: Phaser.Keyboard.END,
+    pageDown: Phaser.Keyboard.PAGE_DOWN,
+    clear: Phaser.Keyboard.CLEAR,
+    numpad1: Phaser.Keyboard.NUMPAD_1,
+    numpad2: Phaser.Keyboard.NUMPAD_2,
+    numpad3: Phaser.Keyboard.NUMPAD_3,
+    numpad4: Phaser.Keyboard.NUMPAD_4,
+    numpad5: Phaser.Keyboard.NUMPAD_5,
+    numpad6: Phaser.Keyboard.NUMPAD_6,
+    numpad7: Phaser.Keyboard.NUMPAD_7,
+    numpad8: Phaser.Keyboard.NUMPAD_8,
+    numpad9: Phaser.Keyboard.NUMPAD_9
+  };
+  Object.keys(navKeyCodes).forEach((name) => {
+    this.navKeys[name] = this.game.input.keyboard.addKey(navKeyCodes[name]);
+  });
 
   this.registerCommand(0xfd, this.CMD_UP); // 253
   this.registerCommand(0xfc, this.CMD_DOWN); // 252
@@ -1123,20 +1143,47 @@ PrinceJS.Kid.prototype.tryPickup = function () {
   }
 };
 
+PrinceJS.Kid.prototype.anyNavKeyDown = function (names) {
+  if (!this.navKeys) {
+    return false;
+  }
+  return names.some((name) => this.navKeys[name] && this.navKeys[name].isDown);
+};
+
 PrinceJS.Kid.prototype.keyL = function () {
-  return this.cursors.left.isDown || this.pointerL() || PrinceJS.Utils.gamepadLeftPressed(this.game);
+  return (
+    this.cursors.left.isDown ||
+    this.anyNavKeyDown(["home", "end", "numpad7", "numpad4", "numpad1"]) ||
+    this.pointerL() ||
+    PrinceJS.Utils.gamepadLeftPressed(this.game)
+  );
 };
 
 PrinceJS.Kid.prototype.keyR = function () {
-  return this.cursors.right.isDown || this.pointerR() || PrinceJS.Utils.gamepadRightPressed(this.game);
+  return (
+    this.cursors.right.isDown ||
+    this.anyNavKeyDown(["pageUp", "pageDown", "numpad9", "numpad6", "numpad3"]) ||
+    this.pointerR() ||
+    PrinceJS.Utils.gamepadRightPressed(this.game)
+  );
 };
 
 PrinceJS.Kid.prototype.keyU = function () {
-  return this.cursors.up.isDown || this.pointerU() || PrinceJS.Utils.gamepadUpPressed(this.game);
+  return (
+    this.cursors.up.isDown ||
+    this.anyNavKeyDown(["home", "pageUp", "numpad7", "numpad8", "numpad9"]) ||
+    this.pointerU() ||
+    PrinceJS.Utils.gamepadUpPressed(this.game)
+  );
 };
 
 PrinceJS.Kid.prototype.keyD = function () {
-  return this.cursors.down.isDown || this.pointerD() || PrinceJS.Utils.gamepadDownPressed(this.game);
+  return (
+    this.cursors.down.isDown ||
+    this.anyNavKeyDown(["end", "pageDown", "clear", "numpad1", "numpad2", "numpad5", "numpad3"]) ||
+    this.pointerD() ||
+    PrinceJS.Utils.gamepadDownPressed(this.game)
+  );
 };
 
 PrinceJS.Kid.prototype.keyS = function () {

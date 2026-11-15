@@ -43,7 +43,22 @@ function loadContext(search = "", files = ["src/Boot.js", "src/Utils.js", "src/G
         K: 75,
         W: 87,
         G: 71,
-        SPACEBAR: 32
+        SPACEBAR: 32,
+        CLEAR: 12,
+        PAGE_UP: 33,
+        PAGE_DOWN: 34,
+        END: 35,
+        HOME: 36,
+        SHIFT: 16,
+        NUMPAD_1: 97,
+        NUMPAD_2: 98,
+        NUMPAD_3: 99,
+        NUMPAD_4: 100,
+        NUMPAD_5: 101,
+        NUMPAD_6: 102,
+        NUMPAD_7: 103,
+        NUMPAD_8: 104,
+        NUMPAD_9: 105
       },
       Signal: function () {
         this.listeners = [];
@@ -566,4 +581,91 @@ test("Title Ctrl+L only intercepts and loads when megahit is enabled, and loadGa
   PrinceJS.Title.prototype.shutdown.call(titleState);
   assert.equal(titleState._cheatKeydownHandler, null);
   assert.deepEqual(listeners, {});
+});
+
+test("Kid diagonal and numpad keys map to DOS Prince of Persia directions", () => {
+  const { PrinceJS } = loadContext("?level=1", [
+    "src/Boot.js",
+    "src/Utils.js",
+    "src/Actor.js",
+    "src/Fighter.js",
+    "src/Kid.js"
+  ]);
+  const keyStates = {};
+  const makeKey = (code) => {
+    if (!keyStates[code]) {
+      keyStates[code] = { isDown: false };
+    }
+    return keyStates[code];
+  };
+  const fakeGame = {
+    input: {
+      gamepad: { pad1: { connected: false } },
+      keyboard: {
+        createCursorKeys: () => ({
+          left: { isDown: false },
+          right: { isDown: false },
+          up: { isDown: false },
+          down: { isDown: false }
+        }),
+        addKey: (code) => makeKey(code)
+      }
+    }
+  };
+  const fakeKid = {
+    game: fakeGame,
+    cursors: fakeGame.input.keyboard.createCursorKeys(),
+    shiftKey: fakeGame.input.keyboard.addKey(16),
+    navKeys: {
+      home: makeKey(36),
+      pageUp: makeKey(33),
+      end: makeKey(35),
+      pageDown: makeKey(34),
+      clear: makeKey(12),
+      numpad1: makeKey(97),
+      numpad2: makeKey(98),
+      numpad3: makeKey(99),
+      numpad4: makeKey(100),
+      numpad5: makeKey(101),
+      numpad6: makeKey(102),
+      numpad7: makeKey(103),
+      numpad8: makeKey(104),
+      numpad9: makeKey(105)
+    },
+    anyNavKeyDown: PrinceJS.Kid.prototype.anyNavKeyDown,
+    pointerL: () => false,
+    pointerR: () => false,
+    pointerU: () => false,
+    pointerD: () => false
+  };
+
+  const readDirs = () => ({
+    l: PrinceJS.Kid.prototype.keyL.call(fakeKid),
+    r: PrinceJS.Kid.prototype.keyR.call(fakeKid),
+    u: PrinceJS.Kid.prototype.keyU.call(fakeKid),
+    d: PrinceJS.Kid.prototype.keyD.call(fakeKid)
+  });
+
+  const cases = [
+    ["home", { l: true, r: false, u: true, d: false }],
+    ["pageUp", { l: false, r: true, u: true, d: false }],
+    ["end", { l: true, r: false, u: false, d: true }],
+    ["pageDown", { l: false, r: true, u: false, d: true }],
+    ["clear", { l: false, r: false, u: false, d: true }],
+    ["numpad7", { l: true, r: false, u: true, d: false }],
+    ["numpad8", { l: false, r: false, u: true, d: false }],
+    ["numpad9", { l: false, r: true, u: true, d: false }],
+    ["numpad4", { l: true, r: false, u: false, d: false }],
+    ["numpad5", { l: false, r: false, u: false, d: true }],
+    ["numpad6", { l: false, r: true, u: false, d: false }],
+    ["numpad1", { l: true, r: false, u: false, d: true }],
+    ["numpad2", { l: false, r: false, u: false, d: true }],
+    ["numpad3", { l: false, r: true, u: false, d: true }]
+  ];
+
+  for (const [keyName, expected] of cases) {
+    fakeKid.navKeys[keyName].isDown = true;
+    assert.deepEqual(readDirs(), expected, `Failed for ${keyName}`);
+    fakeKid.navKeys[keyName].isDown = false;
+  }
 });

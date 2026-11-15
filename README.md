@@ -10,6 +10,7 @@ Prince of Persia reimplementation written in HTML5 / JavaScript (MS-DOS version)
     - `Left / Right key`: Move Left/Right, Advance/Retreat
     - `Up key`: Jump, Climb Up, Block Attack
     - `Down key`: Crouch, Crawl, Climb Down, Sheathe Sword
+  - `Home / Page Up / End / Page Down` (or `Numpad`): Diagonal & Numpad movement (`Home` = Left+Up, `Page Up` = Right+Up, `End` = Left+Down, `Page Down` = Right+Down)
   - `SHIFT`: Drink Potion, Grab Edge, Sword Strike
   - `SPACE`: Show Remaining Time
   - `ENTER`: Continue Game
