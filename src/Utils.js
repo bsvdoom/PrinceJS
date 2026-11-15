@@ -383,10 +383,23 @@ PrinceJS.Utils = {
     if (query.get("shortcut") || query.get("_")) {
       PrinceJS.shortcut = (query.get("shortcut") || query.get("_")) === "true";
     }
+
+    if (query.get("scale")) {
+      let queryScale = query.get("scale");
+      if (queryScale === "integer" || queryScale === "fit") {
+        PrinceJS.scaleMode = queryScale;
+      }
+    }
+
+    if (query.get("crt")) {
+      PrinceJS.crtEnabled = query.get("crt") === "true";
+    }
   },
 
   applyScreenWidth() {
-    if (PrinceJS.screenWidth > 0) {
+    if (PrinceJS.Display) {
+      PrinceJS.Display.apply();
+    } else if (PrinceJS.screenWidth > 0) {
       PrinceJS.Utils.gameContainer().style["max-width"] = PrinceJS.screenWidth + "px";
     }
   },
@@ -400,6 +413,8 @@ PrinceJS.Utils = {
         t: PrinceJS.minutes,
         s: PrinceJS.strength,
         w: PrinceJS.screenWidth,
+        scale: PrinceJS.scaleMode,
+        crt: PrinceJS.crtEnabled,
         _: true
       });
     } else {
@@ -408,7 +423,9 @@ PrinceJS.Utils = {
         health: PrinceJS.maxHealth,
         time: PrinceJS.minutes,
         strength: PrinceJS.strength,
-        width: PrinceJS.screenWidth
+        width: PrinceJS.screenWidth,
+        scale: PrinceJS.scaleMode,
+        crt: PrinceJS.crtEnabled
       });
     }
   },
@@ -426,12 +443,16 @@ PrinceJS.Utils = {
       PrinceJS.Utils.setHistoryState({
         s: PrinceJS.strength,
         w: PrinceJS.screenWidth,
+        scale: PrinceJS.scaleMode,
+        crt: PrinceJS.crtEnabled,
         _: true
       });
     } else {
       PrinceJS.Utils.setHistoryState({
         strength: PrinceJS.strength,
-        width: PrinceJS.screenWidth
+        width: PrinceJS.screenWidth,
+        scale: PrinceJS.scaleMode,
+        crt: PrinceJS.crtEnabled
       });
     }
   },

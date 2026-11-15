@@ -87,5 +87,8 @@ PrinceJS.Boot.prototype = {
 
     PrinceJS.Utils.applyQuery();
     PrinceJS.Utils.applyScreenWidth();
+    if (PrinceJS.Display) {
+      PrinceJS.Display.bindShortcuts();
+    }
   }
 };
