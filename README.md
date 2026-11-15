@@ -61,16 +61,20 @@ Prince of Persia reimplementation written in HTML5 / JavaScript (MS-DOS version)
 
 ## Play GitHub Version
 
-- Browser: https://oklemenz.github.io/PrinceJS
+- Browser: https://bsvdoom.github.io/PrinceJS
 
 ## Play Locally
 
 - Install [Node.js](https://nodejs.org)
-- Clone: `https://github.com/oklemenz/PrinceJS.git`
+- Clone: `https://github.com/bsvdoom/PrinceJS.git`
 - Terminal:
   - `npm install`
   - `npm start`
 - Browser: `localhost:8080`
+- Or via Docker:
+  - `docker build -t princejs-enhanced .`
+  - `docker run --rm -p 8767:8767 princejs-enhanced`
+  - Browser: `http://localhost:8767`
 
 ## Options
 
@@ -156,5 +160,6 @@ Converted levels from https://www.popot.org/custom_levels.php:
 
 ## Credits
 
+- https://github.com/oklemenz ([PrinceJS](https://github.com/oklemenz/PrinceJS))
 - https://github.com/ultrabolido ([PrinceJS](https://github.com/ultrabolido/PrinceJS))
 - https://github.com/jmechner ([Prince-of-Persia-Apple-II](https://github.com/jmechner/Prince-of-Persia-Apple-II))
