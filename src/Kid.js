@@ -758,6 +758,7 @@ PrinceJS.Kid.prototype.bump = function () {
     }
   }
   this.crop(null);
+  this.recoverCrop = false;
 };
 
 PrinceJS.Kid.prototype.setBump = function () {
@@ -1059,12 +1060,12 @@ PrinceJS.Kid.prototype.maskAndCrop = function () {
   }
 
   if (this.inJumpUp && this.frameID(78, 79)) {
-    this.crop(new Phaser.Rectangle(0, 7, -this.width * this.charFace, this.height));
+    this.crop(new Phaser.Rectangle(0, 7, Math.abs(this.width), Math.abs(this.height)));
   }
 
   if (this.inJumpUp && this.frameID(81)) {
     this.crop(null);
-    this.crop(new Phaser.Rectangle(0, 3, -this.width * this.charFace, this.height));
+    this.crop(new Phaser.Rectangle(0, 3, Math.abs(this.width), Math.abs(this.height)));
     this.inJumpUp = false;
     this.recoverCrop = true;
   }
