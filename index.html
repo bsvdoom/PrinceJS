@@ -65,7 +65,7 @@
     </div>
     <script type="text/javascript">
       window.onload = () => {
-        let game = new Phaser.Game(640, 400, Phaser.AUTO, "gameContainer", null, false, false);
+        let game = new Phaser.Game(640, 400, Phaser.CANVAS, "gameContainer", null, false, false);
         game.state.add("Boot", PrinceJS.Boot);
         game.state.add("Preloader", PrinceJS.Preloader);
         game.state.add("Game", PrinceJS.Game);

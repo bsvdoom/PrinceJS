@@ -34,6 +34,8 @@ PrinceJS.Init = function () {
   PrinceJS.shortcut = false;
   PrinceJS.danger = null;
   PrinceJS.skipShowLevel = false;
+  PrinceJS.scaleMode = "integer";
+  PrinceJS.crtEnabled = false;
 };
 
 PrinceJS.Gamepad = {
@@ -75,6 +77,11 @@ PrinceJS.Boot.prototype = {
   },
 
   create: function () {
+    this.game.renderer.renderSession.roundPixels = true;
+    this.stage.smoothed = false;
+    this.game.time.desiredFps = 60;
+    this.game.forceSingleUpdate = false;
+
     this.world.scale.set(PrinceJS.SCALE_FACTOR);
     this.state.start("Preloader");
 
