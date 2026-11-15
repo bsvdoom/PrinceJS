@@ -487,10 +487,7 @@ PrinceJS.Fighter.prototype.strike = function () {
     return;
   }
 
-  if (this.charName === "kid" && this.frameID(157, 158)) {
-    this.game.sound.play("StabAir");
-  }
-
+  let struck = false;
   if (
     this.frameID(157, 158) ||
     this.frameID(165) ||
@@ -499,16 +496,29 @@ PrinceJS.Fighter.prototype.strike = function () {
     this.frameID(20, 21) ||
     this.frameID(15)
   ) {
+    if (this.charName === "kid" && this.frameID(157, 158)) {
+      this.game.sound.play("StabAir");
+    }
     this.action = "strike";
     this.allowStrike = false;
-  } else {
-    if (this.frameID(150) || this.frameID(161) || this.frameID(0) || this.blocked) {
-      this.action = "blocktostrike";
-      this.allowStrike = false;
-      this.blocked = false;
-    }
+    struck = true;
+  } else if (this.frameID(150) || this.frameID(161) || this.frameID(0) || this.blocked) {
+    this.action = "blocktostrike";
+    this.allowStrike = false;
+    this.blocked = false;
+    struck = true;
   }
-  this.opponent.onEnemyStrike.dispatch();
+
+  if (!struck) {
+    return;
+  }
+
+  if (this.consumeBufferedKey) {
+    this.consumeBufferedKey("S");
+  }
+  if (this.opponent) {
+    this.opponent.onEnemyStrike.dispatch();
+  }
 };
 
 PrinceJS.Fighter.prototype.block = function () {

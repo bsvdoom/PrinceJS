@@ -52,6 +52,9 @@ PrinceJS.Kid = function (game, level, location, direction, room) {
     this.navKeys[name] = this.game.input.keyboard.addKey(navKeyCodes[name]);
   });
 
+  this.keyBuffer = { L: 0, R: 0, U: 0, D: 0, S: 0 };
+  this.bindKeyBuffer();
+
   this.registerCommand(0xfd, this.CMD_UP); // 253
   this.registerCommand(0xfc, this.CMD_DOWN); // 252
   this.registerCommand(0xf7, this.CMD_IFWTLESS); // 247
@@ -286,22 +289,22 @@ PrinceJS.Kid.prototype.updateBehaviour = function () {
     return;
   }
 
-  if (!this.keyL() && this.faceL()) {
+  if (!this.rawKeyL() && this.faceL()) {
     this.allowCrawl = this.allowAdvance = true;
   }
-  if (!this.keyR() && this.faceR()) {
+  if (!this.rawKeyR() && this.faceR()) {
     this.allowCrawl = this.allowAdvance = true;
   }
-  if (!this.keyL() && this.faceR()) {
+  if (!this.rawKeyL() && this.faceR()) {
     this.allowRetreat = true;
   }
-  if (!this.keyR() && this.faceL()) {
+  if (!this.rawKeyR() && this.faceL()) {
     this.allowRetreat = true;
   }
-  if (!this.keyU()) {
+  if (!this.rawKeyU()) {
     this.allowBlock = true;
   }
-  if (!this.keyS()) {
+  if (!this.rawKeyS()) {
     this.allowStrike = true;
   }
 
@@ -317,40 +320,56 @@ PrinceJS.Kid.prototype.updateBehaviour = function () {
       }
       if (this.flee && this.keyS() && this.canReachOpponent() && this.facingOpponent() && this.hasSword) {
         if (this.tryEngarde()) {
+          this.consumeBufferedKey("S");
           return;
         }
       }
       if (this.keyL() && this.faceR()) {
+        this.consumeBufferedKey("L");
         return this.turn();
       }
       if (this.keyR() && this.faceL()) {
+        this.consumeBufferedKey("R");
         return this.turn();
       }
       if (this.keyL() && this.keyU() && this.faceL()) {
+        this.consumeBufferedKey("L");
+        this.consumeBufferedKey("U");
         return this.standjump();
       }
       if (this.keyR() && this.keyU() && this.faceR()) {
+        this.consumeBufferedKey("R");
+        this.consumeBufferedKey("U");
         return this.standjump();
       }
       if (this.keyL() && this.keyS() && this.faceL()) {
+        this.consumeBufferedKey("L");
+        this.consumeBufferedKey("S");
         return this.step();
       }
       if (this.keyR() && this.keyS() && this.faceR()) {
+        this.consumeBufferedKey("R");
+        this.consumeBufferedKey("S");
         return this.step();
       }
       if (this.keyL() && this.faceL()) {
+        this.consumeBufferedKey("L");
         return this.startrun();
       }
       if (this.keyR() && this.faceR()) {
+        this.consumeBufferedKey("R");
         return this.startrun();
       }
       if (this.keyU()) {
+        this.consumeBufferedKey("U");
         return this.jump();
       }
       if (this.keyD()) {
+        this.consumeBufferedKey("D");
         return this.stoop();
       }
       if (this.keyS()) {
+        this.consumeBufferedKey("S");
         return this.tryPickup();
       }
       break;
@@ -360,16 +379,12 @@ PrinceJS.Kid.prototype.updateBehaviour = function () {
       this.charRepeat = false;
       if (this.frameID(1, 3)) {
         if (this.keyU()) {
-          return this.standjump();
-        }
-        if (this.keyU()) {
-          return this.standjump();
-        }
-        if (this.keyU()) {
+          this.consumeBufferedKey("U");
           return this.standjump();
         }
       } else {
         if (this.keyU()) {
+          this.consumeBufferedKey("U");
           if (this.frameID(4, 6)) {
             return this.runjump();
           } else {
@@ -382,21 +397,25 @@ PrinceJS.Kid.prototype.updateBehaviour = function () {
     case "running":
       this.charRepeat = false;
       if (this.keyL() && this.faceR()) {
+        this.consumeBufferedKey("L");
         return this.runturn();
       }
       if (this.keyR() && this.faceL()) {
+        this.consumeBufferedKey("R");
         return this.runturn();
       }
-      if (!this.keyL() && this.faceL()) {
+      if (!this.rawKeyL() && this.faceL()) {
         return this.runstop();
       }
-      if (!this.keyR() && this.faceR()) {
+      if (!this.rawKeyR() && this.faceR()) {
         return this.runstop();
       }
       if (this.keyU()) {
+        this.consumeBufferedKey("U");
         return this.runjump();
       }
       if (this.keyD()) {
+        this.consumeBufferedKey("D");
         return this.rdiveroll();
       }
       break;
@@ -405,9 +424,11 @@ PrinceJS.Kid.prototype.updateBehaviour = function () {
       this.blockEngarde = false;
       this.charRepeat = false;
       if (this.keyL() && this.faceL() && this.frameID(48)) {
+        this.consumeBufferedKey("L");
         return this.turnrun();
       }
       if (this.keyR() && this.faceR() && this.frameID(48)) {
+        this.consumeBufferedKey("R");
         return this.turnrun();
       }
       break;
@@ -420,13 +441,15 @@ PrinceJS.Kid.prototype.updateBehaviour = function () {
       if (this.pickupPotion && this.frameID(109)) {
         return this.drinkPotion();
       }
-      if (!this.keyD() && this.frameID(109)) {
+      if (!this.rawKeyD() && this.frameID(109)) {
         return this.standup();
       }
       if (this.keyL() && this.faceL() && this.allowCrawl) {
+        this.consumeBufferedKey("L");
         return this.crawl();
       }
       if (this.keyR() && this.faceR() && this.allowCrawl) {
+        this.consumeBufferedKey("R");
         return this.crawl();
       }
       break;
@@ -445,9 +468,10 @@ PrinceJS.Kid.prototype.updateBehaviour = function () {
         }
       }
       if (this.keyU() && !this.grabWait) {
+        this.consumeBufferedKey("U");
         return this.climbup();
       }
-      if (!this.keyS()) {
+      if (!this.rawKeyS()) {
         return this.startFall();
       }
       if (this.frameID(92)) {
@@ -458,9 +482,10 @@ PrinceJS.Kid.prototype.updateBehaviour = function () {
     case "hangstraight":
       this.charRepeat = false;
       if (this.keyU() && !this.grabWait) {
+        this.consumeBufferedKey("U");
         return this.climbup();
       }
-      if (!this.keyS()) {
+      if (!this.rawKeyS()) {
         return this.startFall();
       }
       break;
@@ -479,15 +504,19 @@ PrinceJS.Kid.prototype.updateBehaviour = function () {
     case "engarde":
       this.charRepeat = false;
       if (this.keyL() && this.faceL() && this.allowAdvance) {
+        this.consumeBufferedKey("L");
         return this.advance();
       }
       if (this.keyR() && this.faceR() && this.allowAdvance) {
+        this.consumeBufferedKey("R");
         return this.advance();
       }
       if (this.keyL() && this.faceR() && this.allowRetreat) {
+        this.consumeBufferedKey("L");
         return this.retreat();
       }
       if (this.keyR() && this.faceL() && this.allowRetreat) {
+        this.consumeBufferedKey("R");
         return this.retreat();
       }
       if (this.keyU() && this.allowBlock) {
@@ -497,11 +526,21 @@ PrinceJS.Kid.prototype.updateBehaviour = function () {
         return this.strike();
       }
       if (this.keyD()) {
+        this.consumeBufferedKey("D");
         return this.fastsheathe();
       }
       break;
 
     case "advance":
+      this.charRepeat = false;
+      if (this.keyU() && this.allowBlock) {
+        return this.block();
+      }
+      if (this.keyS() && this.allowStrike) {
+        return this.strike();
+      }
+      break;
+
     case "blockedstrike":
       this.charRepeat = false;
       if (this.keyU() && this.allowBlock) {
@@ -511,6 +550,15 @@ PrinceJS.Kid.prototype.updateBehaviour = function () {
 
     case "retreat":
     case "strike":
+      this.charRepeat = false;
+      if (this.keyU() && this.allowBlock) {
+        return this.block();
+      }
+      if (this.keyS() && this.allowStrike) {
+        return this.strike();
+      }
+      break;
+
     case "block":
       this.charRepeat = false;
       if (this.keyS() && this.allowStrike) {
@@ -836,6 +884,7 @@ PrinceJS.Kid.prototype.bumpFall = function () {
 };
 
 PrinceJS.Kid.prototype.fastsheathe = function () {
+  this.clearKeyBuffer();
   this.flee = true;
   this.action = "fastsheathe";
   this.swordDrawn = false;
@@ -846,7 +895,7 @@ PrinceJS.Kid.prototype.fastsheathe = function () {
 };
 
 PrinceJS.Kid.prototype.block = function () {
-  if (this.frameID(158) || this.frameID(165)) {
+  if (this.frameID(157, 158) || this.frameID(165)) {
     if (this.opponent !== null) {
       if (this.opponent.frameID(18)) {
         return;
@@ -855,6 +904,8 @@ PrinceJS.Kid.prototype.block = function () {
       if (this.opponent.frameID(3)) {
         this.processCommand();
       }
+    } else {
+      return;
     }
   } else {
     if (!this.frameID(167)) {
@@ -864,6 +915,7 @@ PrinceJS.Kid.prototype.block = function () {
   }
 
   this.allowBlock = false;
+  this.consumeBufferedKey("U");
 };
 
 PrinceJS.Kid.prototype.prepareCheckFloor = function () {
@@ -1143,6 +1195,113 @@ PrinceJS.Kid.prototype.tryPickup = function () {
   }
 };
 
+PrinceJS.Kid.COMBAT_ACTIONS = [
+  "engarde",
+  "advance",
+  "retreat",
+  "strike",
+  "block",
+  "striketoblock",
+  "blocktostrike",
+  "blockedstrike"
+];
+
+PrinceJS.Kid.prototype.bindKeyBuffer = function () {
+  const bind = (key, dirs) => {
+    if (key && key.onDown && typeof key.onDown.add === "function") {
+      key.onDown.add(() => {
+        for (let i = 0; i < dirs.length; i++) {
+          this.bufferKeyPress(dirs[i]);
+        }
+      });
+    }
+  };
+
+  if (this.cursors) {
+    bind(this.cursors.left, ["L"]);
+    bind(this.cursors.right, ["R"]);
+    bind(this.cursors.up, ["U"]);
+    bind(this.cursors.down, ["D"]);
+  }
+  bind(this.shiftKey, ["S"]);
+
+  const navMap = {
+    home: ["L", "U"],
+    pageUp: ["R", "U"],
+    end: ["L", "D"],
+    pageDown: ["R", "D"],
+    clear: ["D"],
+    numpad1: ["L", "D"],
+    numpad2: ["D"],
+    numpad3: ["R", "D"],
+    numpad4: ["L"],
+    numpad5: ["D"],
+    numpad6: ["R"],
+    numpad7: ["L", "U"],
+    numpad8: ["U"],
+    numpad9: ["R", "U"]
+  };
+  if (this.navKeys) {
+    Object.keys(navMap).forEach((name) => {
+      bind(this.navKeys[name], navMap[name]);
+    });
+  }
+};
+
+PrinceJS.Kid.prototype.bufferKeyPress = function (dir) {
+  if (!this.keyBuffer) {
+    return;
+  }
+  this.keyBuffer[dir] = Date.now();
+  if (dir === "U") {
+    this.allowBlock = true;
+  } else if (dir === "S") {
+    this.allowStrike = true;
+  } else if (dir === "L") {
+    if (this.faceL()) {
+      this.allowCrawl = this.allowAdvance = true;
+    } else {
+      this.allowRetreat = true;
+    }
+  } else if (dir === "R") {
+    if (this.faceR()) {
+      this.allowCrawl = this.allowAdvance = true;
+    } else {
+      this.allowRetreat = true;
+    }
+  }
+};
+
+PrinceJS.Kid.prototype.hasBufferedKey = function (dir) {
+  if (!this.keyBuffer || !this.keyBuffer[dir]) {
+    return false;
+  }
+  let inCombat = (dir === "U" || dir === "S") && PrinceJS.Kid.COMBAT_ACTIONS.includes(this.action);
+  let ttl = inCombat ? 700 : 200;
+  if (Date.now() - this.keyBuffer[dir] <= ttl) {
+    return true;
+  }
+  this.keyBuffer[dir] = 0;
+  return false;
+};
+
+PrinceJS.Kid.prototype.consumeBufferedKey = function (dir) {
+  if (this.keyBuffer && dir in this.keyBuffer) {
+    this.keyBuffer[dir] = 0;
+  }
+};
+
+PrinceJS.Kid.prototype.clearKeyBuffer = function () {
+  if (!this.keyBuffer) {
+    return;
+  }
+  this.keyBuffer.L = 0;
+  this.keyBuffer.R = 0;
+  this.keyBuffer.U = 0;
+  this.keyBuffer.D = 0;
+  this.keyBuffer.S = 0;
+};
+
 PrinceJS.Kid.prototype.anyNavKeyDown = function (names) {
   if (!this.navKeys) {
     return false;
@@ -1150,7 +1309,7 @@ PrinceJS.Kid.prototype.anyNavKeyDown = function (names) {
   return names.some((name) => this.navKeys[name] && this.navKeys[name].isDown);
 };
 
-PrinceJS.Kid.prototype.keyL = function () {
+PrinceJS.Kid.prototype.rawKeyL = function () {
   return (
     this.cursors.left.isDown ||
     this.anyNavKeyDown(["home", "end", "numpad7", "numpad4", "numpad1"]) ||
@@ -1159,7 +1318,7 @@ PrinceJS.Kid.prototype.keyL = function () {
   );
 };
 
-PrinceJS.Kid.prototype.keyR = function () {
+PrinceJS.Kid.prototype.rawKeyR = function () {
   return (
     this.cursors.right.isDown ||
     this.anyNavKeyDown(["pageUp", "pageDown", "numpad9", "numpad6", "numpad3"]) ||
@@ -1168,7 +1327,7 @@ PrinceJS.Kid.prototype.keyR = function () {
   );
 };
 
-PrinceJS.Kid.prototype.keyU = function () {
+PrinceJS.Kid.prototype.rawKeyU = function () {
   return (
     this.cursors.up.isDown ||
     this.anyNavKeyDown(["home", "pageUp", "numpad7", "numpad8", "numpad9"]) ||
@@ -1177,7 +1336,7 @@ PrinceJS.Kid.prototype.keyU = function () {
   );
 };
 
-PrinceJS.Kid.prototype.keyD = function () {
+PrinceJS.Kid.prototype.rawKeyD = function () {
   return (
     this.cursors.down.isDown ||
     this.anyNavKeyDown(["end", "pageDown", "clear", "numpad1", "numpad2", "numpad5", "numpad3"]) ||
@@ -1186,8 +1345,28 @@ PrinceJS.Kid.prototype.keyD = function () {
   );
 };
 
-PrinceJS.Kid.prototype.keyS = function () {
+PrinceJS.Kid.prototype.rawKeyS = function () {
   return this.shiftKey.isDown || this.pointerS() || PrinceJS.Utils.gamepadActionPressed(this.game);
+};
+
+PrinceJS.Kid.prototype.keyL = function () {
+  return PrinceJS.Kid.prototype.rawKeyL.call(this) || PrinceJS.Kid.prototype.hasBufferedKey.call(this, "L");
+};
+
+PrinceJS.Kid.prototype.keyR = function () {
+  return PrinceJS.Kid.prototype.rawKeyR.call(this) || PrinceJS.Kid.prototype.hasBufferedKey.call(this, "R");
+};
+
+PrinceJS.Kid.prototype.keyU = function () {
+  return PrinceJS.Kid.prototype.rawKeyU.call(this) || PrinceJS.Kid.prototype.hasBufferedKey.call(this, "U");
+};
+
+PrinceJS.Kid.prototype.keyD = function () {
+  return PrinceJS.Kid.prototype.rawKeyD.call(this) || PrinceJS.Kid.prototype.hasBufferedKey.call(this, "D");
+};
+
+PrinceJS.Kid.prototype.keyS = function () {
+  return PrinceJS.Kid.prototype.rawKeyS.call(this) || PrinceJS.Kid.prototype.hasBufferedKey.call(this, "S");
 };
 
 PrinceJS.Kid.prototype.pointerL = function () {
