@@ -74,6 +74,7 @@ PrinceJS.Interface.prototype = {
     this.player.onDamageLife.add(this.damagePlayerLive, this);
     this.player.onRecoverLive.add(this.recoverPlayerLive, this);
     this.player.onAddLive.add(this.addPlayerLive, this);
+    this.player.onRevive.add(this.syncPlayerLive, this);
   },
 
   damagePlayerLive: function (num) {
@@ -101,6 +102,21 @@ PrinceJS.Interface.prototype = {
 
     for (let i = 0; i < this.playerHPActive; i++) {
       this.playerHPs[i].frameName = "kid-live";
+    }
+  },
+
+  syncPlayerLive: function () {
+    if (!this.player) {
+      return;
+    }
+    for (let i = this.playerHPs.length; i < this.player.maxHealth && i < 10; i++) {
+      let hp = this.game.add.sprite(i * 7, 2, "general", "kid-emptylive");
+      this.playerHPs[i] = hp;
+      this.layer.addChild(hp);
+    }
+    this.playerHPActive = Math.min(this.player.health, this.playerHPs.length);
+    for (let i = 0; i < this.playerHPs.length; i++) {
+      this.playerHPs[i].frameName = i < this.playerHPActive ? "kid-live" : "kid-emptylive";
     }
   },
 
@@ -262,9 +278,17 @@ PrinceJS.Interface.prototype = {
 
   showPressButtonToContinue: function () {
     PrinceJS.Utils.delayed(() => {
+      if (this.player && this.player.alive) {
+        return;
+      }
       this.showText("Press Button to Continue", "continue");
       this.pressButtonToContinueTimer = 200;
     }, 4000);
+  },
+
+  showNotice: function (text) {
+    this.showText(text, "notice");
+    this.hideTextTimer = 30;
   },
 
   showGamePaused: function () {

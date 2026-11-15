@@ -317,6 +317,20 @@ PrinceJS.Utils = {
     PrinceJS.Utils.updateQuery();
   },
 
+  adjustRemainingMinutes: function (deltaMinutes) {
+    let now = Date.now();
+    if (!PrinceJS.startTime) {
+      PrinceJS.startTime = new Date(now - (60 - (PrinceJS.minutes || 60)) * 60000);
+    }
+    let minStart = now - 59 * 60000;
+    let maxStart = now;
+    let nextStart = Math.min(maxStart, Math.max(minStart, PrinceJS.startTime.getTime() + deltaMinutes * 60000));
+    PrinceJS.startTime = new Date(nextStart);
+    PrinceJS.endTime = undefined;
+    PrinceJS.Utils.updateQuery();
+    return PrinceJS.Utils.getRemainingMinutes();
+  },
+
   getDeltaTime: function () {
     if (!PrinceJS.startTime) {
       return {
@@ -394,6 +408,10 @@ PrinceJS.Utils = {
     if (query.get("crt")) {
       PrinceJS.crtEnabled = query.get("crt") === "true";
     }
+
+    if (query.get("megahit") || query.get("m")) {
+      PrinceJS.megahit = (query.get("megahit") || query.get("m")) === "true";
+    }
   },
 
   applyScreenWidth() {
@@ -407,7 +425,7 @@ PrinceJS.Utils = {
   updateQuery: function () {
     PrinceJS.minutes = PrinceJS.Utils.getRemainingMinutes();
     if (PrinceJS.shortcut) {
-      PrinceJS.Utils.setHistoryState({
+      let state = {
         l: PrinceJS.currentLevel,
         h: PrinceJS.maxHealth,
         t: PrinceJS.minutes,
@@ -416,9 +434,13 @@ PrinceJS.Utils = {
         scale: PrinceJS.scaleMode,
         crt: PrinceJS.crtEnabled,
         _: true
-      });
+      };
+      if (PrinceJS.megahit) {
+        state.m = true;
+      }
+      PrinceJS.Utils.setHistoryState(state);
     } else {
-      PrinceJS.Utils.setHistoryState({
+      let state = {
         level: PrinceJS.currentLevel,
         health: PrinceJS.maxHealth,
         time: PrinceJS.minutes,
@@ -426,7 +448,11 @@ PrinceJS.Utils = {
         width: PrinceJS.screenWidth,
         scale: PrinceJS.scaleMode,
         crt: PrinceJS.crtEnabled
-      });
+      };
+      if (PrinceJS.megahit) {
+        state.megahit = true;
+      }
+      PrinceJS.Utils.setHistoryState(state);
     }
   },
 
@@ -440,20 +466,106 @@ PrinceJS.Utils = {
 
   clearQuery: function () {
     if (PrinceJS.shortcut) {
-      PrinceJS.Utils.setHistoryState({
+      let state = {
         s: PrinceJS.strength,
         w: PrinceJS.screenWidth,
         scale: PrinceJS.scaleMode,
         crt: PrinceJS.crtEnabled,
         _: true
-      });
+      };
+      if (PrinceJS.megahit) {
+        state.m = true;
+      }
+      PrinceJS.Utils.setHistoryState(state);
     } else {
-      PrinceJS.Utils.setHistoryState({
+      let state = {
         strength: PrinceJS.strength,
         width: PrinceJS.screenWidth,
         scale: PrinceJS.scaleMode,
         crt: PrinceJS.crtEnabled
-      });
+      };
+      if (PrinceJS.megahit) {
+        state.megahit = true;
+      }
+      PrinceJS.Utils.setHistoryState(state);
+    }
+  },
+
+  SAVE_KEY: "princejs_save",
+
+  isCtrlKeyShortcut: function (event, keyChar, keyCode) {
+    if (!event || !event.ctrlKey || event.shiftKey || event.altKey || event.metaKey) {
+      return false;
+    }
+    return event.keyCode === keyCode || (typeof event.key === "string" && event.key.toLowerCase() === keyChar);
+  },
+
+  saveGame: function (kid) {
+    if (typeof window === "undefined" || !window.localStorage) {
+      return false;
+    }
+    let elapsedMs = PrinceJS.startTime
+      ? Math.max(0, Math.min(3600000, (PrinceJS.endTime || new Date()).getTime() - PrinceJS.startTime.getTime()))
+      : (60 - (PrinceJS.minutes || 60)) * 60000;
+    let payload = {
+      level: PrinceJS.currentLevel,
+      health: kid ? kid.health : PrinceJS.currentHealth || PrinceJS.maxHealth,
+      maxHealth: kid ? kid.maxHealth : PrinceJS.maxHealth,
+      elapsedMs: elapsedMs,
+      strength: PrinceJS.strength
+    };
+    try {
+      window.localStorage.setItem(PrinceJS.Utils.SAVE_KEY, JSON.stringify(payload));
+      return true;
+    } catch {
+      return false;
+    }
+  },
+
+  hasSavedGame: function () {
+    if (typeof window === "undefined" || !window.localStorage) {
+      return false;
+    }
+    try {
+      return Boolean(window.localStorage.getItem(PrinceJS.Utils.SAVE_KEY));
+    } catch {
+      return false;
+    }
+  },
+
+  loadGame: function () {
+    if (typeof window === "undefined" || !window.localStorage) {
+      return false;
+    }
+    try {
+      let raw = window.localStorage.getItem(PrinceJS.Utils.SAVE_KEY);
+      if (!raw) {
+        return false;
+      }
+      let data = JSON.parse(raw);
+      if (!data || typeof data.level !== "number" || !((data.level >= 1 && data.level <= 14) || data.level >= 90)) {
+        return false;
+      }
+      let maxHealth =
+        typeof data.maxHealth === "number" && data.maxHealth >= 3 && data.maxHealth <= 10 ? data.maxHealth : 3;
+      let health = typeof data.health === "number" && data.health >= 1 ? Math.min(maxHealth, data.health) : maxHealth;
+      let elapsedMs =
+        typeof data.elapsedMs === "number" && data.elapsedMs >= 0 && data.elapsedMs <= 3600000 ? data.elapsedMs : 0;
+
+      PrinceJS.currentLevel = data.level;
+      PrinceJS.maxHealth = maxHealth;
+      PrinceJS.currentHealth = health;
+      if (typeof data.strength === "number" && data.strength >= 0 && data.strength <= 100) {
+        PrinceJS.strength = data.strength;
+      }
+      PrinceJS.minutes = Math.min(60, Math.max(1, 60 - Math.floor(elapsedMs / 60000)));
+      PrinceJS.startTime = new Date(Date.now() - elapsedMs);
+      PrinceJS.endTime = undefined;
+      PrinceJS.danger = null;
+      PrinceJS.Utils.updateQuery();
+      return true;
+    } catch {
+      return false;
     }
   },
 

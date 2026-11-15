@@ -1,10 +1,10 @@
-# Prince of Persia (JS) - princejs.com
+# Prince of Persia (JS) - bsvdoom.github.io/PrinceJS
 
 Prince of Persia reimplementation written in HTML5 / JavaScript (MS-DOS version)
 
 ## Play Online
 
-- Browser: https://princejs.com
+- Browser: https://bsvdoom.github.io/PrinceJS
 - Keyboard
   - `Cursor keys`: Movement
     - `Left / Right key`: Move Left/Right, Advance/Retreat
@@ -29,13 +29,13 @@ Prince of Persia reimplementation written in HTML5 / JavaScript (MS-DOS version)
 
 ## Play Mobile
 
-- Browser: https://princejs.com
+- Browser: https://bsvdoom.github.io/PrinceJS
   - Use Landscape Mode
   - Single Tab
   - Disable Landscape Tab Bar in Browser Settings
 - Add to Home Screen to start as Fullscreen App
 - Reduced difficulty (50%):
-  - https://princejs.com?strength=50
+  - https://bsvdoom.github.io/PrinceJS?strength=50
 - Touch Controls (tap/drag area on screen, fight mode in brackets):
 
   ![Mobile](assets/web/mobile.svg)
@@ -51,11 +51,11 @@ Prince of Persia reimplementation written in HTML5 / JavaScript (MS-DOS version)
 ## Play on Apple Watch
 
 - Mail/Message
-  - Send mail or message to yourself with body: https://princejs.com
+  - Send mail or message to yourself with body: https://bsvdoom.github.io/PrinceJS
   - On Apple Watch open Mail or Message app
   - Click included link to open Browser
 - Siri
-  - Tell Siri 'princejs.com' on Apple Watch
+  - Tell Siri 'bsvdoom.github.io/PrinceJS' on Apple Watch
   - Watch out for correct localized pronunciation
 - Play using Touch Controls as on Mobile
 
@@ -87,17 +87,33 @@ Url parameters are leveraged to save game state automatically (shortcut in brack
 - `width (w)`: Game Width in "px" (default: 0 (fit to screen))
 - `scale`: Display scaling mode: `integer` (crisp physical integer multiples, default) or `fit` (stretch to viewport)
 - `crt`: CRT scanline overlay: `true` or `false` (default: `false`)
+- `megahit (m)`: Enable cheat mode (`true` or `false`, default: `false`)
 - `shortcut (_)`: Write url in shortcut version (default: false)
 
 In-game display shortcuts: `F8` toggles `integer` / `fit` scaling; `F9` toggles the CRT scanline overlay.
 
+Cheat shortcuts (with `megahit=true` or toggled in-game via `Shift+M`):
+
+- `Shift+M`: Toggle Megahit cheat mode
+- `Ctrl+G`: Save game state (`localStorage`)
+- `Ctrl+L`: Load saved game state (works on Title screen and in-game)
+- `Shift+L`: Skip to next level (all levels, keeps remaining time; without `megahit`, levels 1-3 only and caps time at 15 min)
+- `Shift+T`: Extra health bottle and full heal
+- `K`: Kill current opponent on screen
+- `R`: Revive Prince when dead
+- `Shift+W`: Toggle feather fall / slow fall on and off (18s when enabled)
+- `Shift+I`: Flip screen upside down
+- `Shift+C`: Show current room ID and adjacent room links
+- `H` / `J` / `U` / `N`: Peek adjacent room (left / right / up / down; `SPACE` returns to Prince)
+- `+` / `-`: Add or subtract 1 remaining minute
+
 Default url looks as follows:
 
-https://princejs.com?level=1&health=3&time=60&strength=100&width=0
+https://bsvdoom.github.io/PrinceJS?level=1&health=3&time=60&strength=100&width=0
 
 Default shortcut url looks as follows:
 
-https://princejs.com?l=1&h=3&t=60&s=100&w=0&_=true
+https://bsvdoom.github.io/PrinceJS?l=1&h=3&t=60&s=100&w=0&_=true
 
 Manual adjustments of url parameters is possible as preset options.
 
@@ -130,23 +146,23 @@ Custom levels can be played performing the following steps.
 
 Converted levels from https://www.popot.org/custom_levels.php:
 
-- [99](https://princejs.com?level=99&strength=50): Chamber Play (own)
-- [100](https://princejs.com?level=100&strength=50): Tower of Revenge (own)
-- [101-114](https://princejs.com?level=101&strength=50): Prince of Persia Revisited ([source](https://www.popot.org/custom_levels.php?mod=0000163))
-- [115-128](https://princejs.com?level=115&strength=50): Jaffar's House ([source](https://www.popot.org/custom_levels.php?mod=0000220))
-- [129-142](https://princejs.com?level=129&strength=50): Ipank's Levels ([source](https://www.popot.org/custom_levels.php?mod=0000151))
-- [143-156](https://princejs.com?level=143&strength=50): Barre's Alternative ([source](https://www.popot.org/custom_levels.php?mod=0000189))
-- [157-170](https://princejs.com?level=157&strength=50): Miracles Don't Exist ([source](https://www.popot.org/custom_levels.php?mod=0000098))
-- [171-184](https://princejs.com?level=171&strength=50): Babylon Tower Climb ([source](https://www.popot.org/custom_levels.php?mod=0000109))
-- [185-198](https://princejs.com?level=185&strength=50): Lost in Errors ([source](https://www.popot.org/custom_levels.php?mod=0000144))
-- [199-212](https://princejs.com?level=199&strength=50): Story Retold ([source](https://www.popot.org/custom_levels.php?mod=0000146))
-- [213-226](https://princejs.com?level=213&strength=50): Prince of Persia Guard Revolt ([source](https://www.popot.org/custom_levels.php?mod=0000162))
-- [227-240](https://princejs.com?level=227&strength=50): Return of Prince ([source](https://www.popot.org/custom_levels.php?mod=0000207))
-- [241-254](https://princejs.com?level=241&strength=50): The Sequel ([source](https://www.popot.org/custom_levels.php?mod=0000273))
-- [255-268](https://princejs.com?level=255&strength=50): Nahemsan ([source](https://www.popot.org/custom_levels.php?mod=0000272))
-- [269-282](https://princejs.com?level=269&strength=50): 4-Rooms Levelset ([source](https://www.popot.org/custom_levels.php?mod=0000052))
-- [283-296](https://princejs.com?level=283&strength=50): Repetition of Time ([source](https://www.popot.org/custom_levels.php?mod=0000010))
-- [297-310](https://princejs.com?level=297&strength=50): Same Story Different Version ([source](https://www.popot.org/custom_levels.php?mod=0000276))
+- [99](https://bsvdoom.github.io/PrinceJS?level=99&strength=50): Chamber Play (own)
+- [100](https://bsvdoom.github.io/PrinceJS?level=100&strength=50): Tower of Revenge (own)
+- [101-114](https://bsvdoom.github.io/PrinceJS?level=101&strength=50): Prince of Persia Revisited ([source](https://www.popot.org/custom_levels.php?mod=0000163))
+- [115-128](https://bsvdoom.github.io/PrinceJS?level=115&strength=50): Jaffar's House ([source](https://www.popot.org/custom_levels.php?mod=0000220))
+- [129-142](https://bsvdoom.github.io/PrinceJS?level=129&strength=50): Ipank's Levels ([source](https://www.popot.org/custom_levels.php?mod=0000151))
+- [143-156](https://bsvdoom.github.io/PrinceJS?level=143&strength=50): Barre's Alternative ([source](https://www.popot.org/custom_levels.php?mod=0000189))
+- [157-170](https://bsvdoom.github.io/PrinceJS?level=157&strength=50): Miracles Don't Exist ([source](https://www.popot.org/custom_levels.php?mod=0000098))
+- [171-184](https://bsvdoom.github.io/PrinceJS?level=171&strength=50): Babylon Tower Climb ([source](https://www.popot.org/custom_levels.php?mod=0000109))
+- [185-198](https://bsvdoom.github.io/PrinceJS?level=185&strength=50): Lost in Errors ([source](https://www.popot.org/custom_levels.php?mod=0000144))
+- [199-212](https://bsvdoom.github.io/PrinceJS?level=199&strength=50): Story Retold ([source](https://www.popot.org/custom_levels.php?mod=0000146))
+- [213-226](https://bsvdoom.github.io/PrinceJS?level=213&strength=50): Prince of Persia Guard Revolt ([source](https://www.popot.org/custom_levels.php?mod=0000162))
+- [227-240](https://bsvdoom.github.io/PrinceJS?level=227&strength=50): Return of Prince ([source](https://www.popot.org/custom_levels.php?mod=0000207))
+- [241-254](https://bsvdoom.github.io/PrinceJS?level=241&strength=50): The Sequel ([source](https://www.popot.org/custom_levels.php?mod=0000273))
+- [255-268](https://bsvdoom.github.io/PrinceJS?level=255&strength=50): Nahemsan ([source](https://www.popot.org/custom_levels.php?mod=0000272))
+- [269-282](https://bsvdoom.github.io/PrinceJS?level=269&strength=50): 4-Rooms Levelset ([source](https://www.popot.org/custom_levels.php?mod=0000052))
+- [283-296](https://bsvdoom.github.io/PrinceJS?level=283&strength=50): Repetition of Time ([source](https://www.popot.org/custom_levels.php?mod=0000010))
+- [297-310](https://bsvdoom.github.io/PrinceJS?level=297&strength=50): Same Story Different Version ([source](https://www.popot.org/custom_levels.php?mod=0000276))
 
 ### Level Walkthrough
 

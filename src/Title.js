@@ -53,6 +53,19 @@ PrinceJS.Title.prototype = {
     });
 
     this.input.keyboard.onDownCallback = this.play.bind(this);
+
+    this._cheatKeydownHandler = (event) => {
+      if ((PrinceJS.megahit || PrinceJS.Utils.hasSavedGame()) && PrinceJS.Utils.isCtrlKeyShortcut(event, "l", 76)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        if (PrinceJS.Utils.loadGame()) {
+          this.play();
+        }
+      }
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("keydown", this._cheatKeydownHandler, true);
+    }
   },
 
   update: function () {
@@ -108,5 +121,12 @@ PrinceJS.Title.prototype = {
 
   stopMusic: function () {
     this.game.sound.stopAll();
+  },
+
+  shutdown: function () {
+    if (typeof window !== "undefined" && this._cheatKeydownHandler) {
+      window.removeEventListener("keydown", this._cheatKeydownHandler, true);
+      this._cheatKeydownHandler = null;
+    }
   }
 };

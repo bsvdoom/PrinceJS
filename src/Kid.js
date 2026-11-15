@@ -8,7 +8,15 @@ PrinceJS.Kid = function (game, level, location, direction, room) {
   this.onNextLevel = new Phaser.Signal();
   this.onRecoverLive = new Phaser.Signal();
   this.onAddLive = new Phaser.Signal();
+  this.onRevive = new Phaser.Signal();
   this.onFlipped = new Phaser.Signal();
+
+  this.spawnRoom = room;
+  this.spawnX = this.charX;
+  this.spawnY = this.charY;
+  this.lastSafeRoom = room;
+  this.lastSafeX = this.charX;
+  this.lastSafeY = this.charY;
 
   this.pickupSword = false;
   this.pickupPotion = false;
@@ -162,6 +170,25 @@ PrinceJS.Kid.prototype.updateActor = function () {
   this.updateCharPosition();
   this.updateSwordPosition();
   this.maskAndCrop();
+  this.recordSafePosition();
+};
+
+PrinceJS.Kid.prototype.recordSafePosition = function () {
+  if (!this.alive || this.inFallDown || this.action !== "stand" || this.room <= 0 || !this.level.rooms[this.room]) {
+    return;
+  }
+  let tile = this.level.getTileAt(this.charBlockX, this.charBlockY, this.room);
+  if (
+    tile &&
+    tile.element !== PrinceJS.Level.TILE_SPACE &&
+    tile.element !== PrinceJS.Level.TILE_SPIKES &&
+    tile.element !== PrinceJS.Level.TILE_CHOPPER &&
+    tile.element !== PrinceJS.Level.TILE_LOOSE_BOARD
+  ) {
+    this.lastSafeRoom = this.room;
+    this.lastSafeX = this.charX;
+    this.lastSafeY = this.charY;
+  }
 };
 
 PrinceJS.Kid.prototype.drinkPotion = function () {
@@ -1734,6 +1761,20 @@ PrinceJS.Kid.prototype.floatFall = function () {
   this.inFloatTimeoutCancel = handle.cancel;
 };
 
+PrinceJS.Kid.prototype.toggleFloatFall = function () {
+  if (this.inFloat) {
+    if (this.inFloatTimeoutCancel !== null) {
+      this.inFloatTimeoutCancel();
+      this.inFloatTimeoutCancel = null;
+    }
+    this.inFloat = false;
+    this.fallingBlocks = 0;
+    return false;
+  }
+  this.floatFall();
+  return true;
+};
+
 PrinceJS.Kid.prototype.damageStruck = function () {
   if (!this.alive) {
     return;
@@ -1749,9 +1790,54 @@ PrinceJS.Kid.prototype.damageStruck = function () {
   }
 };
 
+PrinceJS.Kid.prototype.revive = function () {
+  if (this.alive) {
+    return false;
+  }
+
+  let currentTile =
+    this.room > 0 && this.level.rooms[this.room]
+      ? this.level.getTileAt(this.charBlockX, this.charBlockY, this.room)
+      : null;
+
+  if (
+    this.room <= 0 ||
+    !this.level.rooms[this.room] ||
+    !currentTile ||
+    currentTile.element === PrinceJS.Level.TILE_SPACE
+  ) {
+    this.room = this.lastSafeRoom || this.spawnRoom;
+    this.charX = this.lastSafeX !== undefined ? this.lastSafeX : this.spawnX;
+    this.charY = this.lastSafeY !== undefined ? this.lastSafeY : this.spawnY;
+  }
+
+  this.alive = true;
+  this.swordDrawn = false;
+  this.inJumpUp = false;
+  this.inFallDown = false;
+  this.fallingBlocks = 0;
+  this.charXVel = 0;
+  this.charYVel = 0;
+  this.actionCode = 1;
+  this.ledgeSwing = 0;
+  this.health = this.maxHealth;
+
+  this.updateBlockXY();
+  this.alignToFloor();
+  this.updateBase();
+  this.action = "stand";
+  this.processCommand();
+  this.updateCharPosition();
+  this.updateSwordPosition();
+  this.maskAndCrop();
+  this.onChangeRoom.dispatch(this.room);
+  this.onRevive.dispatch();
+  return true;
+};
+
 PrinceJS.Kid.prototype.proceedOnDead = function () {
   PrinceJS.Utils.delayed(() => {
-    if (this.game) {
+    if (this.game && !this.alive) {
       if (this.opponent && this.opponent.baseCharName === "jaffar") {
         this.game.sound.play("HeroicDeath");
       } else {

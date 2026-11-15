@@ -127,9 +127,45 @@ PrinceJS.Game.prototype = {
     this.input.keyboard.addKey(Phaser.Keyboard.R).onDown.add(this.restartGameEvent, this);
     this.input.keyboard.addKey(Phaser.Keyboard.A).onDown.add(this.restartLevelEvent, this);
     this.input.keyboard.addKey(Phaser.Keyboard.L).onDown.add(this.nextLevelEvent, this);
+    this.input.keyboard.addKey(Phaser.Keyboard.M).onDown.add(this.toggleMegahitEvent, this);
+    this.input.keyboard.addKey(Phaser.Keyboard.T).onDown.add(this.addLifeCheatEvent, this);
+    this.input.keyboard.addKey(Phaser.Keyboard.K).onDown.add(this.killOpponentCheatEvent, this);
+    this.input.keyboard.addKey(Phaser.Keyboard.W).onDown.add(this.floatFallCheatEvent, this);
+    this.input.keyboard.addKey(Phaser.Keyboard.I).onDown.add(this.flipScreenCheatEvent, this);
+    this.input.keyboard.addKey(Phaser.Keyboard.C).onDown.add(this.showRoomInfoCheatEvent, this);
+    this.input.keyboard.addKey(Phaser.Keyboard.H).onDown.add(this.peekRoomLeftCheatEvent, this);
+    this.input.keyboard.addKey(Phaser.Keyboard.J).onDown.add(this.peekRoomRightCheatEvent, this);
+    this.input.keyboard.addKey(Phaser.Keyboard.U).onDown.add(this.peekRoomUpCheatEvent, this);
+    this.input.keyboard.addKey(Phaser.Keyboard.N).onDown.add(this.peekRoomDownCheatEvent, this);
     this.input.keyboard.addKey(Phaser.Keyboard.SPACEBAR).onDown.add(this.showRemainingMinutes, this);
 
     this.input.keyboard.onDownCallback = this.buttonPressed.bind(this);
+
+    this._cheatKeydownHandler = (event) => {
+      if (!PrinceJS.megahit) {
+        return;
+      }
+      if (PrinceJS.Utils.isCtrlKeyShortcut(event, "g", 71)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.saveGameCheat();
+      } else if (PrinceJS.Utils.isCtrlKeyShortcut(event, "l", 76)) {
+        event.preventDefault();
+        event.stopImmediatePropagation();
+        this.loadGameCheat();
+      } else if (!event.ctrlKey && !event.altKey && !event.metaKey) {
+        if (event.key === "+" || event.keyCode === 107) {
+          event.preventDefault();
+          this.adjustTimeCheat(1);
+        } else if (event.key === "-" || event.keyCode === 109) {
+          event.preventDefault();
+          this.adjustTimeCheat(-1);
+        }
+      }
+    };
+    if (typeof window !== "undefined") {
+      window.addEventListener("keydown", this._cheatKeydownHandler, true);
+    }
 
     this.firstUpdate = true;
     if (PrinceJS.danger === null) {
@@ -575,6 +611,9 @@ PrinceJS.Game.prototype = {
   },
 
   showRemainingMinutes: function (force) {
+    if (PrinceJS.megahit && this.kid && this.kid.room > 0 && this.currentCameraRoom !== this.kid.room) {
+      this.setupCamera(this.kid.room);
+    }
     this.ui.showRemainingMinutes(force);
   },
 
@@ -588,6 +627,9 @@ PrinceJS.Game.prototype = {
 
   restartGameEvent(event) {
     if (!event.ctrlKey && !event.shiftKey) {
+      if (PrinceJS.megahit && !event.altKey && !(event.event && event.event.metaKey) && this.kid && !this.kid.alive) {
+        this.reviveKid();
+      }
       return;
     }
     this.restartGame();
@@ -601,15 +643,180 @@ PrinceJS.Game.prototype = {
   },
 
   nextLevelEvent: function (event) {
-    if (!event.ctrlKey && !event.shiftKey) {
+    if (!event.shiftKey || event.ctrlKey) {
       return;
     }
 
-    if (PrinceJS.currentLevel > 3 && PrinceJS.currentLevel < 90) {
+    if (!PrinceJS.megahit && PrinceJS.currentLevel > 3 && PrinceJS.currentLevel < 90) {
       return;
     }
 
-    this.nextLevel(undefined, true);
+    this.nextLevel(undefined, true, PrinceJS.megahit);
+  },
+
+  toggleMegahitEvent: function (event) {
+    if (!event.shiftKey || event.ctrlKey || event.altKey || (event.event && event.event.metaKey)) {
+      return;
+    }
+    PrinceJS.megahit = !PrinceJS.megahit;
+    PrinceJS.Utils.updateQuery();
+    if (this.ui) {
+      this.ui.showNotice(PrinceJS.megahit ? "MEGAHIT ON" : "MEGAHIT OFF");
+    }
+  },
+
+  addLifeCheatEvent: function (event) {
+    if (!PrinceJS.megahit || !event.shiftKey || event.ctrlKey || event.altKey || (event.event && event.event.metaKey)) {
+      return;
+    }
+    if (this.kid && this.kid.alive) {
+      this.kid.addLife();
+      PrinceJS.Utils.flashGreenPotion(this.game);
+      if (this.ui) {
+        this.ui.showNotice("EXTRA LIFE");
+      }
+    }
+  },
+
+  killOpponentCheatEvent: function (event) {
+    if (!PrinceJS.megahit || event.ctrlKey || event.shiftKey || event.altKey || (event.event && event.event.metaKey)) {
+      return;
+    }
+    this.killOpponentCheat();
+  },
+
+  killOpponentCheat: function () {
+    let target = this.kid && this.kid.opponent && this.kid.opponent.alive ? this.kid.opponent : null;
+    if (!target || target.room !== this.currentCameraRoom) {
+      target =
+        this.enemies.find((enemy) => enemy && enemy.alive && enemy.active && enemy.room === this.currentCameraRoom) ||
+        target;
+    }
+    if (!target || !target.alive) {
+      return false;
+    }
+    target.die();
+    if (this.level && this.level.number === 12 && target.charName === "shadow") {
+      this.level.leapOfFaith = true;
+    }
+    if (this.ui) {
+      this.ui.showNotice("ENEMY KILLED");
+    }
+    return true;
+  },
+
+  floatFallCheatEvent: function (event) {
+    if (!PrinceJS.megahit || !event.shiftKey || event.ctrlKey || event.altKey || (event.event && event.event.metaKey)) {
+      return;
+    }
+    if (this.kid && this.kid.alive) {
+      let enabled = this.kid.toggleFloatFall();
+      if (this.ui) {
+        this.ui.showNotice(enabled ? "FEATHER FALL ON" : "FEATHER FALL OFF");
+      }
+    }
+  },
+
+  reviveKid: function () {
+    if (!this.kid || this.kid.alive || !this.kid.revive()) {
+      return false;
+    }
+    this.continueTimer = -1;
+    this.pressButtonToContinueTimer = -1;
+    if (this.ui) {
+      this.ui.pressButtonToContinueTimer = -1;
+      this.ui.hideText();
+      this.ui.showNotice("REVIVED");
+    }
+    return true;
+  },
+
+  saveGameCheat: function () {
+    if (PrinceJS.Utils.saveGame(this.kid) && this.ui) {
+      this.ui.showNotice("GAME SAVED");
+    }
+  },
+
+  loadGameCheat: function () {
+    if (PrinceJS.Utils.loadGame()) {
+      this.reset(true);
+    } else if (this.ui) {
+      this.ui.showNotice("NO SAVED GAME");
+    }
+  },
+
+  flipScreenCheatEvent: function (event) {
+    if (!PrinceJS.megahit || !event.shiftKey || event.ctrlKey || event.altKey || (event.event && event.event.metaKey)) {
+      return;
+    }
+    if (this.kid) {
+      this.kid.flipScreen();
+    }
+  },
+
+  showRoomInfoCheatEvent: function (event) {
+    if (!PrinceJS.megahit || !event.shiftKey || event.ctrlKey || event.altKey || (event.event && event.event.metaKey)) {
+      return;
+    }
+    let room = this.currentCameraRoom;
+    let links = (this.level && this.level.rooms[room] && this.level.rooms[room].links) || {};
+    let fmt = (id) => (id > 0 ? id : "-");
+    if (this.ui) {
+      this.ui.showNotice(`ROOM ${room} L${fmt(links.left)} R${fmt(links.right)} U${fmt(links.up)} D${fmt(links.down)}`);
+    }
+  },
+
+  isPlainKeyEvent: function (event) {
+    return Boolean(
+      event && !event.ctrlKey && !event.shiftKey && !event.altKey && !(event.event && event.event.metaKey)
+    );
+  },
+
+  peekRoomLeftCheatEvent: function (event) {
+    if (PrinceJS.megahit && this.isPlainKeyEvent(event)) {
+      this.peekRoomCheat("left");
+    }
+  },
+
+  peekRoomRightCheatEvent: function (event) {
+    if (PrinceJS.megahit && this.isPlainKeyEvent(event)) {
+      this.peekRoomCheat("right");
+    }
+  },
+
+  peekRoomUpCheatEvent: function (event) {
+    if (PrinceJS.megahit && this.isPlainKeyEvent(event)) {
+      this.peekRoomCheat("up");
+    }
+  },
+
+  peekRoomDownCheatEvent: function (event) {
+    if (PrinceJS.megahit && this.isPlainKeyEvent(event)) {
+      this.peekRoomCheat("down");
+    }
+  },
+
+  peekRoomCheat: function (direction) {
+    let current = this.level && this.level.rooms[this.currentCameraRoom];
+    if (!current || !current.links) {
+      return false;
+    }
+    let targetRoom = current.links[direction];
+    if (targetRoom > 0 && this.level.rooms[targetRoom]) {
+      this.setupCamera(targetRoom);
+      if (this.ui) {
+        this.ui.showNotice("ROOM " + targetRoom);
+      }
+      return true;
+    }
+    return false;
+  },
+
+  adjustTimeCheat: function (deltaMinutes) {
+    PrinceJS.Utils.adjustRemainingMinutes(deltaMinutes);
+    if (this.ui) {
+      this.ui.showRemainingMinutes(true);
+    }
   },
 
   restartGame() {
@@ -668,6 +875,9 @@ PrinceJS.Game.prototype = {
   },
 
   handleDead: function () {
+    if (this.kid && this.kid.alive) {
+      return;
+    }
     this.continueTimer = 10;
   },
 
@@ -691,7 +901,20 @@ PrinceJS.Game.prototype = {
     this.handleDead();
   },
 
-  buttonPressed: function () {
+  buttonPressed: function (event) {
+    if (
+      PrinceJS.megahit &&
+      this.kid &&
+      !this.kid.alive &&
+      event &&
+      event.keyCode === Phaser.Keyboard.R &&
+      !event.ctrlKey &&
+      !event.shiftKey &&
+      !event.altKey &&
+      !event.metaKey
+    ) {
+      return;
+    }
     if (this.pressButtonToContinueTimer > -1) {
       this.reset(true);
     }
@@ -859,6 +1082,13 @@ PrinceJS.Game.prototype = {
     this.kid.checkLooseFloor(tile);
     for (let i = 0; i < this.enemies.length; i++) {
       this.enemies[i].checkLooseFloor(tile);
+    }
+  },
+
+  shutdown: function () {
+    if (typeof window !== "undefined" && this._cheatKeydownHandler) {
+      window.removeEventListener("keydown", this._cheatKeydownHandler, true);
+      this._cheatKeydownHandler = null;
     }
   }
 };

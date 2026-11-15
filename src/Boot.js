@@ -36,6 +36,7 @@ PrinceJS.Init = function () {
   PrinceJS.skipShowLevel = false;
   PrinceJS.scaleMode = "integer";
   PrinceJS.crtEnabled = false;
+  PrinceJS.megahit = false;
 };
 
 PrinceJS.Gamepad = {
