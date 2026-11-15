@@ -81,7 +81,11 @@ Url parameters are leveraged to save game state automatically (shortcut in brack
 - `time (t)`: Remaining Minutes (1-60, default: 60)
 - `strength (s)`: Guard Strength in "%" (0-100, default: 100)
 - `width (w)`: Game Width in "px" (default: 0 (fit to screen))
+- `scale`: Display scaling mode: `integer` (crisp physical integer multiples, default) or `fit` (stretch to viewport)
+- `crt`: CRT scanline overlay: `true` or `false` (default: `false`)
 - `shortcut (_)`: Write url in shortcut version (default: false)
+
+In-game display shortcuts: `F8` toggles `integer` / `fit` scaling; `F9` toggles the CRT scanline overlay.
 
 Default url looks as follows:
 

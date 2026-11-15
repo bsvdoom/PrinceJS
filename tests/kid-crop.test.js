@@ -42,7 +42,8 @@ test("maskAndCrop uses positive crop width even if width and charFace sign misma
     recoverCrop: false,
     faceR: () => true,
     faceL: () => false,
-    frameID: (from, to) => (to === undefined ? fakeKid.charFrame === from : fakeKid.charFrame >= from && fakeKid.charFrame <= to),
+    frameID: (from, to) =>
+      to === undefined ? fakeKid.charFrame === from : fakeKid.charFrame >= from && fakeKid.charFrame <= to,
     level: { unMaskTile() {}, maskTile() {} },
     crop(rect) {
       crops.push(rect);

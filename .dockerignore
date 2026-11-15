@@ -1,0 +1,9 @@
+.git
+.agents
+.superpowers
+node_modules
+converter
+docs
+tests
+*.md
+assets/web/*.gif
