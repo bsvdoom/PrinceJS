@@ -93,7 +93,7 @@ Url parameters are leveraged to save game state automatically (shortcut in brack
 
 In-game display shortcuts: `F8` toggles `integer` / `fit` scaling; `F9` toggles the CRT scanline overlay.
 
-Cheat shortcuts (with `megahit=true` or toggled in-game via `Shift+M`):
+Cheat shortcuts (with `megahit=true`, e.g. https://bsvdoom.github.io/PrinceJS/?megahit=true, or toggled in-game via `Shift+M`):
 
 - `Shift+M`: Toggle Megahit cheat mode
 - `Ctrl+G`: Save game state (`localStorage`)
