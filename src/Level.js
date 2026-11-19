@@ -264,7 +264,8 @@ PrinceJS.Level.prototype = {
     }
 
     if (this.events[event].next) {
-      this.fireEvent(event + 1, type);
+      // DOS do_trigger_list: every entry of the chain gets the same trigger (incl. stuck/debris).
+      this.fireEvent(event + 1, type, stuck);
     }
   },
 

@@ -5,6 +5,8 @@ PrinceJS.Tile.Spikes = function (game, modifier, type) {
 
   this.state = PrinceJS.Tile.Spikes.STATE_INACTIVE;
   this.step = 0;
+  // DOS is_spike_harmful/start_anim_spike: a static modifier of 5 or more (or 0xFF) is a
+  // harmless spike that never animates; only 0 (retracted, armed) and 1-4 can hurt.
   this.mortal = modifier < 5;
 
   if (modifier > 2 && modifier < 6) {
@@ -69,7 +71,14 @@ PrinceJS.Tile.Spikes.prototype.update = function () {
   }
 };
 
+PrinceJS.Tile.Spikes.prototype.isHarmful = function () {
+  return this.mortal;
+};
+
 PrinceJS.Tile.Spikes.prototype.raise = function () {
+  if (!this.mortal) {
+    return;
+  }
   if (this.state === PrinceJS.Tile.Spikes.STATE_INACTIVE) {
     this.state = PrinceJS.Tile.Spikes.STATE_RAISING;
     this.game.sound.play("ImpaledBySpikes");

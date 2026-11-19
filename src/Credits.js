@@ -8,6 +8,7 @@ PrinceJS.Credits.prototype = {
   preload: function () {},
 
   create: function () {
+    this.leaving = false;
     this.tick = 0;
 
     this.game.world.setBounds(0, 0, PrinceJS.SCREEN_WIDTH, PrinceJS.SCREEN_HEIGHT);
@@ -44,9 +45,13 @@ PrinceJS.Credits.prototype = {
     this.tween4.onComplete.add(this.play, this);
 
     this.input.keyboard.onDownCallback = null;
-    PrinceJS.Utils.delayed(() => {
-      this.input.keyboard.onDownCallback = this.play.bind(this);
-    }, 1000);
+    PrinceJS.Utils.gameDelayed(
+      this.game,
+      () => {
+        this.input.keyboard.onDownCallback = this.play.bind(this);
+      },
+      1000
+    );
   },
 
   update: function () {
@@ -75,6 +80,10 @@ PrinceJS.Credits.prototype = {
   },
 
   play: function () {
+    if (this.leaving) {
+      return;
+    }
+    this.leaving = true;
     PrinceJS.currentLevel = 1;
     this.input.keyboard.onDownCallback = null;
     this.state.start("Game");

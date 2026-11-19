@@ -10,6 +10,7 @@ PrinceJS.EndTitle.prototype = {
   },
 
   create: function () {
+    this.leaving = false;
     this.stopMusic();
 
     this.tick = 0;
@@ -39,9 +40,13 @@ PrinceJS.EndTitle.prototype = {
     this.tween3.onComplete.add(this.next, this);
 
     this.input.keyboard.onDownCallback = null;
-    PrinceJS.Utils.delayed(() => {
-      this.input.keyboard.onDownCallback = this.next.bind(this);
-    }, 1000);
+    PrinceJS.Utils.gameDelayed(
+      this.game,
+      () => {
+        this.input.keyboard.onDownCallback = this.next.bind(this);
+      },
+      1000
+    );
   },
 
   update: function () {
@@ -67,6 +72,10 @@ PrinceJS.EndTitle.prototype = {
   },
 
   next: function () {
+    if (this.leaving) {
+      return;
+    }
+    this.leaving = true;
     this.input.keyboard.onDownCallback = null;
     this.state.start("Title");
   },

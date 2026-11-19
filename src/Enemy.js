@@ -21,6 +21,7 @@ PrinceJS.Enemy = function (game, level, location, direction, room, skill, color,
   this.strikeTimer = 0;
   this.lookBelow = false;
   this.startFight = false;
+  this.startFightTimer = -1;
 
   this.health = PrinceJS.Enemy.EXTRA_STRENGTH[skill] + PrinceJS.Enemy.STRENGTH[this.level.number];
 
@@ -44,6 +45,8 @@ PrinceJS.Enemy.ADVANCE_PROBABILITY = [255, 200, 200, 200, 255, 255, 200, 0, 0, 2
 PrinceJS.Enemy.REFRAC_TIMER = [16, 16, 16, 16, 8, 8, 8, 8, 0, 8, 0, 0];
 PrinceJS.Enemy.EXTRA_STRENGTH = [0, 0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0];
 PrinceJS.Enemy.STRENGTH = [4, 3, 3, 3, 3, 4, 5, 4, 4, 5, 5, 5, 4, 6, 10, 0];
+PrinceJS.Enemy.NOTICE_TICKS = 6; // ≈ 500 ms
+PrinceJS.Enemy.JAFFAR_NOTICE_TICKS = 28; // DOS meet_Jaffar: guard_notice_timer = 28
 PrinceJS.Enemy.COLOR = [0x4890fc, 0xa83000, 0xfc5000, 0x0c9000, 0x5a00fc, 0xc858fc, 0xfcfc00];
 
 PrinceJS.Enemy.prototype = Object.create(PrinceJS.Fighter.prototype);
@@ -88,15 +91,19 @@ PrinceJS.Enemy.prototype.updateBehaviour = function () {
   if (!this.opponent.alive) {
     return;
   }
-  if (this.willStartFight()) {
-    PrinceJS.Utils.delayed(
-      () => {
-        if (this.willStartFight()) {
-          this.startFight = true;
-        }
-      },
-      this.baseCharName === "jaffar" ? 2300 : 500
-    );
+  // Notice delay before the guard starts fighting, counted in game ticks (DOS frames) so it
+  // pauses with the game and dies with the level. Jaffar: guard_notice_timer = 28 (2.33 s).
+  if (this.startFightTimer > 0) {
+    this.startFightTimer--;
+    if (this.startFightTimer === 0) {
+      this.startFightTimer = -1;
+      if (this.willStartFight()) {
+        this.startFight = true;
+      }
+    }
+  } else if (this.willStartFight()) {
+    this.startFightTimer =
+      this.baseCharName === "jaffar" ? PrinceJS.Enemy.JAFFAR_NOTICE_TICKS : PrinceJS.Enemy.NOTICE_TICKS;
   }
 
   if (this.refracTimer > 0) {
@@ -393,6 +400,7 @@ PrinceJS.Enemy.prototype.setActive = function () {
 PrinceJS.Enemy.prototype.setInactive = function () {
   this.active = false;
   this.startFight = false;
+  this.startFightTimer = -1;
   if (this.charName === "skeleton") {
     this.action = "laydown";
   }

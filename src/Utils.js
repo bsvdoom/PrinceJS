@@ -64,6 +64,101 @@ PrinceJS.Utils = {
     });
   },
 
+  // Delay bound to the Phaser game clock: it pauses with the game and is discarded
+  // automatically when the state changes (StateManager.clearCurrentState → time.removeAll).
+  // Use this instead of `delayed` for everything that belongs to the current state.
+  gameDelayed: function (game, fn, millis) {
+    if (!game || !game.time || !game.time.events || typeof game.time.events.add !== "function") {
+      return PrinceJS.Utils.delayedCancelable(fn, millis);
+    }
+    let event = game.time.events.add(Math.max(0, millis || 0), () => {
+      if (fn) {
+        fn();
+      }
+    });
+    return {
+      cancel: () => {
+        if (game.time && game.time.events) {
+          game.time.events.remove(event);
+        }
+      }
+    };
+  },
+
+  // Like `perform`, but on the game clock (see gameDelayed). The promise never resolves when the
+  // state changes in between, so chained programs stop with the state they belong to.
+  gamePerform: function (game, fn, millis) {
+    return new Promise((resolve) => {
+      let result = fn && fn();
+      PrinceJS.Utils.gameDelayed(game, () => resolve(result), millis);
+    });
+  },
+
+  // --- Game time (DOS: rem_min / rem_tick only advance in play_frame while the kid is alive) ---
+  // The remaining time is derived from the wall clock (startTime). While any "hold" is active the
+  // clock is frozen; when the last hold is released, startTime is shifted by the held duration.
+  timerHolds: {},
+  timerHeldAt: null,
+
+  timerNow: function () {
+    return PrinceJS.Utils.timerHeldAt !== null ? PrinceJS.Utils.timerHeldAt : Date.now();
+  },
+
+  isTimerHeld: function () {
+    return Object.keys(PrinceJS.Utils.timerHolds).length > 0;
+  },
+
+  holdTimer: function (reason) {
+    let holds = PrinceJS.Utils.timerHolds;
+    if (holds[reason]) {
+      return;
+    }
+    if (!PrinceJS.Utils.isTimerHeld()) {
+      PrinceJS.Utils.timerHeldAt = Date.now();
+    }
+    holds[reason] = true;
+  },
+
+  releaseTimer: function (reason) {
+    let holds = PrinceJS.Utils.timerHolds;
+    if (!holds[reason]) {
+      return;
+    }
+    delete holds[reason];
+    if (!PrinceJS.Utils.isTimerHeld() && PrinceJS.Utils.timerHeldAt !== null) {
+      let heldMs = Date.now() - PrinceJS.Utils.timerHeldAt;
+      PrinceJS.Utils.timerHeldAt = null;
+      if (PrinceJS.startTime && !PrinceJS.endTime && heldMs > 0) {
+        PrinceJS.startTime = new Date(PrinceJS.startTime.getTime() + heldMs);
+      }
+    }
+  },
+
+  setTimerHold: function (reason, held) {
+    if (held) {
+      PrinceJS.Utils.holdTimer(reason);
+    } else {
+      PrinceJS.Utils.releaseTimer(reason);
+    }
+  },
+
+  // Continue the clock from where endTime stopped it (e.g. level 13 restarted after Jaffar's death).
+  resumeEndTime: function () {
+    if (!PrinceJS.endTime) {
+      return;
+    }
+    if (PrinceJS.startTime) {
+      let stoppedMs = PrinceJS.Utils.timerNow() - PrinceJS.endTime.getTime();
+      PrinceJS.startTime = new Date(PrinceJS.startTime.getTime() + Math.max(0, stoppedMs));
+    }
+    PrinceJS.endTime = undefined;
+  },
+
+  // Sets the remaining time (in minutes) relative to the (possibly frozen) game clock.
+  setRemainingTime: function (minutes) {
+    PrinceJS.startTime = new Date(PrinceJS.Utils.timerNow() - (60 - minutes) * 60000);
+  },
+
   flashScreen: function (game, count, color, time) {
     for (let i = 0; i < count * 2; i++) {
       PrinceJS.Utils.delayed(() => {
@@ -116,6 +211,24 @@ PrinceJS.Utils = {
 
   continueGame: function (game) {
     return PrinceJS.Utils.pointerPressed(game) || PrinceJS.Utils.gamepadAnyPressed(game);
+  },
+
+  // Face/shoulder buttons only (no D-pad, no +/-): the gamepad equivalent of the DOS
+  // "button" (Shift/Enter, joystick fire) used for "Press Button to Continue".
+  gamepadContinuePressed: function (game) {
+    return PrinceJS.Utils.gamepadButtonPressedCheck(
+      game,
+      [
+        PrinceJS.Gamepad.A,
+        PrinceJS.Gamepad.B,
+        PrinceJS.Gamepad.Y,
+        PrinceJS.Gamepad.L,
+        PrinceJS.Gamepad.R,
+        PrinceJS.Gamepad.ZL,
+        PrinceJS.Gamepad.ZR
+      ],
+      "continue"
+    );
   },
 
   gamepadButtonPressedCheck: function (game, buttons, name = "default") {
@@ -302,23 +415,21 @@ PrinceJS.Utils = {
 
   setRemainingMinutesTo15() {
     if (PrinceJS.Utils.getRemainingMinutes() > 15) {
-      PrinceJS.Utils.minutes = 15;
-      let date = new Date();
-      date.setMinutes(date.getMinutes() - (60 - PrinceJS.Utils.minutes));
-      PrinceJS.startTime = date;
+      PrinceJS.minutes = 15;
+      PrinceJS.Utils.setRemainingTime(15);
       PrinceJS.Utils.updateQuery();
     }
   },
 
   resetRemainingMinutesTo60() {
-    PrinceJS.Utils.minutes = 60;
+    PrinceJS.minutes = 60;
     PrinceJS.startTime = undefined;
     PrinceJS.endTime = undefined;
     PrinceJS.Utils.updateQuery();
   },
 
   adjustRemainingMinutes: function (deltaMinutes) {
-    let refTime = PrinceJS.endTime ? PrinceJS.endTime.getTime() : Date.now();
+    let refTime = PrinceJS.endTime ? PrinceJS.endTime.getTime() : PrinceJS.Utils.timerNow();
     if (!PrinceJS.startTime) {
       PrinceJS.startTime = new Date(refTime - (60 - (PrinceJS.minutes || 60)) * 60000);
     }
@@ -337,7 +448,8 @@ PrinceJS.Utils = {
         seconds: -1
       };
     }
-    let diff = (PrinceJS.endTime || new Date()).getTime() - PrinceJS.startTime.getTime();
+    let now = PrinceJS.endTime ? PrinceJS.endTime.getTime() : PrinceJS.Utils.timerNow();
+    let diff = now - PrinceJS.startTime.getTime();
     let minutes = Math.floor(diff / 60000);
     let seconds = Math.floor(diff / 1000) % 60;
     return { minutes, seconds };
@@ -360,11 +472,46 @@ PrinceJS.Utils = {
     return value;
   },
 
+  // Levels that have a map: original 1-14 (assets/maps) and custom 99-310 (assets/maps/custom).
+  CUSTOM_LEVEL_FIRST: 99,
+  CUSTOM_LEVEL_LAST: 310,
+
+  isHarmfulSpikes: function (tile) {
+    return Boolean(
+      tile && tile.element === PrinceJS.Level.TILE_SPIKES && (typeof tile.isHarmful !== "function" || tile.isHarmful())
+    );
+  },
+
+  // The DOS level number (1-14) of a level; custom packs reuse 1-14 for levels 101+.
+  levelNumber: function (level) {
+    return level && level.number ? level.number : PrinceJS.Utils.levelNumberOf(PrinceJS.currentLevel);
+  },
+
+  // DOS level number for a level index before its map is loaded: 99/100 are numbered 1/2,
+  // 101-310 are packs of 14 levels each (101 → 1, ..., 114 → 14, 115 → 1, ...).
+  levelNumberOf: function (levelIndex) {
+    if (levelIndex >= 101) {
+      return ((levelIndex - 101) % 14) + 1;
+    }
+    if (levelIndex >= PrinceJS.Utils.CUSTOM_LEVEL_FIRST) {
+      return levelIndex - PrinceJS.Utils.CUSTOM_LEVEL_FIRST + 1;
+    }
+    return levelIndex;
+  },
+
+  isPlayableLevel: function (level) {
+    return (
+      Number.isInteger(level) &&
+      ((level >= 1 && level <= 14) ||
+        (level >= PrinceJS.Utils.CUSTOM_LEVEL_FIRST && level <= PrinceJS.Utils.CUSTOM_LEVEL_LAST))
+    );
+  },
+
   applyQuery: function () {
     let query = new URLSearchParams(window.location.search);
     if (query.get("level") || query.get("l")) {
       let queryLevel = parseInt(query.get("level") || query.get("l"), 10);
-      if ((!isNaN(queryLevel) && queryLevel >= 1 && queryLevel <= 14) || queryLevel >= 90) {
+      if (PrinceJS.Utils.isPlayableLevel(queryLevel)) {
         PrinceJS.currentLevel = queryLevel;
       }
     }
@@ -455,14 +602,6 @@ PrinceJS.Utils = {
     }
   },
 
-  restoreQuery: function () {
-    if (PrinceJS.Utils.getRemainingMinutes() < PrinceJS.minutes) {
-      let date = new Date();
-      date.setMinutes(date.getMinutes() - (60 - PrinceJS.minutes));
-      PrinceJS.startTime = date;
-    }
-  },
-
   clearQuery: function () {
     if (PrinceJS.shortcut) {
       let state = {
@@ -503,8 +642,9 @@ PrinceJS.Utils = {
     if (typeof window === "undefined" || !window.localStorage) {
       return false;
     }
+    let nowMs = PrinceJS.endTime ? PrinceJS.endTime.getTime() : PrinceJS.Utils.timerNow();
     let elapsedMs = PrinceJS.startTime
-      ? Math.max(0, Math.min(3600000, (PrinceJS.endTime || new Date()).getTime() - PrinceJS.startTime.getTime()))
+      ? Math.max(0, Math.min(3600000, nowMs - PrinceJS.startTime.getTime()))
       : (60 - (PrinceJS.minutes || 60)) * 60000;
     let payload = {
       level: PrinceJS.currentLevel,
@@ -542,11 +682,7 @@ PrinceJS.Utils = {
         return false;
       }
       let data = JSON.parse(raw);
-      if (
-        !data ||
-        !Number.isInteger(data.level) ||
-        !((data.level >= 1 && data.level <= 14) || (data.level >= 90 && data.level <= 999))
-      ) {
+      if (!data || !Number.isInteger(data.level) || !PrinceJS.Utils.isPlayableLevel(data.level)) {
         return false;
       }
       let maxHealth =
@@ -562,7 +698,7 @@ PrinceJS.Utils = {
         PrinceJS.strength = data.strength;
       }
       PrinceJS.minutes = Math.min(60, Math.max(1, 60 - Math.floor(elapsedMs / 60000)));
-      PrinceJS.startTime = new Date(Date.now() - elapsedMs);
+      PrinceJS.startTime = new Date(PrinceJS.Utils.timerNow() - elapsedMs);
       PrinceJS.endTime = undefined;
       PrinceJS.danger = null;
       PrinceJS.Utils.updateQuery();

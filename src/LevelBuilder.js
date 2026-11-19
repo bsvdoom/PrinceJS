@@ -191,9 +191,13 @@ PrinceJS.LevelBuilder.prototype = {
         tile = new PrinceJS.Tile.ExitDoor(this.game, t.modifier, this.type, open);
         this.level.addTrob(tile);
         if (open) {
-          PrinceJS.Utils.delayed(() => {
-            tile.drop();
-          }, 200);
+          PrinceJS.Utils.gameDelayed(
+            this.game,
+            () => {
+              tile.drop();
+            },
+            200
+          );
         }
         break;
 

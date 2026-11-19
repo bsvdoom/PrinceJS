@@ -160,8 +160,15 @@ test("nextLevelEvent skips past level 3 only in megahit mode, preserves time, an
   const { PrinceJS } = loadContext();
   let nextLevelCalls = [];
   const fakeGame = {
+    level: { number: 5 },
+    canSkipLevel: PrinceJS.Game.prototype.canSkipLevel,
+    requestNextLevel: PrinceJS.Game.prototype.requestNextLevel,
+    requestPreviousLevel: PrinceJS.Game.prototype.requestPreviousLevel,
     nextLevel: (triggerLevel, skipped, keepRemainingTime) => {
       nextLevelCalls.push({ triggerLevel, skipped, keepRemainingTime });
+    },
+    previousLevel: (triggerLevel, skipped) => {
+      nextLevelCalls.push({ previous: true, triggerLevel, skipped });
     }
   };
 
@@ -175,7 +182,42 @@ test("nextLevelEvent skips past level 3 only in megahit mode, preserves time, an
   assert.equal(nextLevelCalls.length, 0);
 
   PrinceJS.Game.prototype.nextLevelEvent.call(fakeGame, { shiftKey: true, ctrlKey: false });
-  assert.deepEqual(nextLevelCalls, [{ triggerLevel: undefined, skipped: true, keepRemainingTime: true }]);
+  assert.deepEqual(nextLevelCalls, [{ triggerLevel: 5, skipped: true, keepRemainingTime: true }]);
+});
+
+test("level skip follows the DOS Shift+L rule for keyboard, gamepad and touch alike", () => {
+  const { PrinceJS } = loadContext();
+  let calls = [];
+  const fakeGame = {
+    level: { number: 3 },
+    canSkipLevel: PrinceJS.Game.prototype.canSkipLevel,
+    nextLevel: (triggerLevel, skipped, keepRemainingTime) =>
+      calls.push(["next", triggerLevel, skipped, keepRemainingTime]),
+    previousLevel: (triggerLevel, skipped) => calls.push(["previous", triggerLevel, skipped])
+  };
+  const request = (name) => PrinceJS.Game.prototype[name].call(fakeGame);
+
+  // Levels 1-3 without cheats: allowed, with the 15 minute cut (keepRemainingTime = false).
+  PrinceJS.megahit = false;
+  PrinceJS.currentLevel = 3;
+  assert.equal(request("requestNextLevel"), true);
+  assert.deepEqual(calls.pop(), ["next", 3, true, false]);
+
+  // No DOS key for going back: only in cheat mode.
+  assert.equal(request("requestPreviousLevel"), false);
+  assert.equal(calls.length, 0);
+
+  // A custom level counts by its DOS number: level 105 is number 5, so no skipping.
+  PrinceJS.currentLevel = 105;
+  fakeGame.level = { number: 5 };
+  assert.equal(request("requestNextLevel"), false);
+  assert.equal(calls.length, 0);
+
+  PrinceJS.megahit = true;
+  assert.equal(request("requestNextLevel"), true);
+  assert.deepEqual(calls.pop(), ["next", 105, true, true]);
+  assert.equal(request("requestPreviousLevel"), true);
+  assert.deepEqual(calls.pop(), ["previous", 105, true]);
 });
 
 test("megahit cheats: reviveKid, killOpponentCheat, addLifeCheatEvent, and floatFallCheatEvent", () => {

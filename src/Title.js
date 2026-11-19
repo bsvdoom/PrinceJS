@@ -8,6 +8,7 @@ PrinceJS.Title.prototype = {
   preload: function () {},
 
   create: function () {
+    this.leaving = false;
     this.stopMusic();
 
     this.tick = 0;
@@ -47,9 +48,13 @@ PrinceJS.Title.prototype = {
       .tween(this.textBack)
       .to({ alpha: 0 }, 2000, Phaser.Easing.Linear.None, false, 0, 0, false);
     this.tween3.onComplete.add(() => {
-      PrinceJS.Utils.delayed(() => {
-        this.cutscene();
-      }, 3500);
+      PrinceJS.Utils.gameDelayed(
+        this.game,
+        () => {
+          this.cutscene();
+        },
+        3500
+      );
     });
 
     this.input.keyboard.onDownCallback = this.play.bind(this);
@@ -108,12 +113,20 @@ PrinceJS.Title.prototype = {
   },
 
   play: function () {
+    if (this.leaving) {
+      return;
+    }
+    this.leaving = true;
     this.stopMusic();
     this.input.keyboard.onDownCallback = null;
     this.state.start("Game");
   },
 
   cutscene: function () {
+    if (this.leaving) {
+      return;
+    }
+    this.leaving = true;
     this.stopMusic();
     this.input.keyboard.onDownCallback = null;
     this.state.start("Cutscene");

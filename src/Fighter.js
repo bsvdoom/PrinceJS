@@ -26,7 +26,7 @@ PrinceJS.Fighter = function (game, level, location, direction, room, key, animKe
   this.inJumpUp = false;
   this.inFallDown = false;
   this.inFloat = false;
-  this.inFloatTimeoutCancel = null;
+  this.inFloatTicks = 0;
   this.fallingBlocks = 0;
 
   this.swordFrame = 0;
@@ -101,14 +101,18 @@ PrinceJS.Fighter.prototype.CMD_DIE = function (data) {
   this.showSplash();
   this.proceedOnDead();
   if (this.charName !== "kid") {
-    PrinceJS.Utils.delayed(() => {
-      if (this.baseCharName === "jaffar") {
-        this.game.sound.play("JaffarDead");
-        PrinceJS.Utils.flashWhiteVizierVictory(this.game);
-      } else if (this.baseCharName !== "shadow") {
-        this.game.sound.play("Victory");
-      }
-    }, 200);
+    PrinceJS.Utils.gameDelayed(
+      this.game,
+      () => {
+        if (this.baseCharName === "jaffar") {
+          this.game.sound.play("JaffarDead");
+          PrinceJS.Utils.flashWhiteVizierVictory(this.game);
+        } else if (this.baseCharName !== "shadow") {
+          this.game.sound.play("Victory");
+        }
+      },
+      200
+    );
   }
 };
 
@@ -298,9 +302,7 @@ PrinceJS.Fighter.prototype.checkFight = function () {
           }
         }
       } else {
-        if (this.charFrame !== "kid") {
-          this.game.sound.play("SwordClash");
-        }
+        this.game.sound.play("SwordClash");
 
         this.opponent.blocked = true;
         this.action = "blockedstrike";
@@ -1085,7 +1087,7 @@ PrinceJS.Fighter.prototype.land = function () {
   this.stopFall();
 
   let tile = this.level.getTileAt(this.charBlockX, this.charBlockY, this.room);
-  if (tile.element === PrinceJS.Level.TILE_SPIKES) {
+  if (PrinceJS.Utils.isHarmfulSpikes(tile)) {
     this.game.sound.play("SpikedBySpikes"); // HardLandingSplat
     this.alignToTile(tile);
     this.dieSpikes();
@@ -1105,9 +1107,13 @@ PrinceJS.Fighter.prototype.land = function () {
 
   if (this.sneakUp) {
     this.sneakUp = false;
-    PrinceJS.Utils.delayed(() => {
-      this.sneakUp = true;
-    }, 250);
+    PrinceJS.Utils.gameDelayed(
+      this.game,
+      () => {
+        this.sneakUp = true;
+      },
+      250
+    );
   }
 };
 

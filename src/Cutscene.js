@@ -56,9 +56,13 @@ PrinceJS.Cutscene.prototype = {
     this.executeProgram();
 
     this.input.keyboard.onDownCallback = null;
-    PrinceJS.Utils.delayed(() => {
-      this.input.keyboard.onDownCallback = this.continue.bind(this);
-    }, 1000);
+    PrinceJS.Utils.gameDelayed(
+      this.game,
+      () => {
+        this.input.keyboard.onDownCallback = this.continue.bind(this);
+      },
+      1000
+    );
 
     this.game.time.events.loop(120, this.updateScene, this);
   },
@@ -188,19 +192,30 @@ PrinceJS.Cutscene.prototype = {
   },
 
   play: function () {
+    if (this.leaving) {
+      return;
+    }
+    this.leaving = true;
     this.stopMusic();
     this.input.keyboard.onDownCallback = null;
     this.state.start("Game");
   },
 
+  // Leaves the cutscene exactly once (key, touch/gamepad skip and the fade-out callback may race).
   next: function () {
+    if (this.leaving) {
+      return;
+    }
     this.input.keyboard.onDownCallback = null;
     if (PrinceJS.currentLevel === 1) {
+      this.leaving = true;
       this.state.start("Credits");
     } else if (PrinceJS.currentLevel === 15) {
+      this.leaving = true;
       PrinceJS.Restart();
       this.state.start("EndTitle");
     } else if (PrinceJS.currentLevel === 16) {
+      this.leaving = true;
       PrinceJS.Restart();
       this.state.start("Title");
     } else {
@@ -209,6 +224,7 @@ PrinceJS.Cutscene.prototype = {
   },
 
   reset: function () {
+    this.leaving = false;
     this.actors = [];
     this.objects = [];
 
@@ -223,19 +239,27 @@ PrinceJS.Cutscene.prototype = {
 
   fadeIn: function (duration = 2000, callback) {
     this.game.add.tween(this.cover).to({ alpha: 0 }, 2000, Phaser.Easing.Linear.None, true, 0, 0, false);
-    PrinceJS.Utils.delayed(() => {
-      if (callback) {
-        callback();
-      }
-    }, duration);
+    PrinceJS.Utils.gameDelayed(
+      this.game,
+      () => {
+        if (callback) {
+          callback();
+        }
+      },
+      duration
+    );
   },
 
   fadeOut: function (duration = 2000, callback) {
     this.game.add.tween(this.cover).to({ alpha: 1 }, 2000, Phaser.Easing.Linear.None, true, 0, 0, false);
-    PrinceJS.Utils.delayed(() => {
-      if (callback) {
-        callback();
-      }
-    }, duration);
+    PrinceJS.Utils.gameDelayed(
+      this.game,
+      () => {
+        if (callback) {
+          callback();
+        }
+      },
+      duration
+    );
   }
 };

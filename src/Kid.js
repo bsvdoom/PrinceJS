@@ -52,6 +52,7 @@ PrinceJS.Kid = function (game, level, location, direction, room) {
     this.navKeys[name] = this.game.input.keyboard.addKey(navKeyCodes[name]);
   });
 
+  this.inputTick = 0;
   this.keyBuffer = { L: 0, R: 0, U: 0, D: 0, S: 0 };
   this.bindKeyBuffer();
 
@@ -66,7 +67,7 @@ PrinceJS.Kid = function (game, level, location, direction, room) {
   this.maxHealth = PrinceJS.maxHealth;
   this.health = PrinceJS.currentHealth || this.maxHealth;
 
-  this.hasSword = PrinceJS.currentLevel > 1;
+  this.hasSword = PrinceJS.Utils.levelNumber(this.level) > 1;
   this.blockEngarde = false;
   this.bumpTimer = 0;
   this.shadowFlashTimer = 0;
@@ -143,18 +144,24 @@ PrinceJS.Kid.prototype.CMD_JARD = function (data) {
 PrinceJS.Kid.prototype.CMD_NEXTLEVEL = function (data) {
   PrinceJS.maxHealth = this.maxHealth;
   let waitTime = 0;
-  if (PrinceJS.currentLevel === 4) {
+  // Decide by the level's DOS number, so custom level packs behave like the original levels.
+  let levelNumber = PrinceJS.Utils.levelNumber(this.level);
+  if (levelNumber === 4) {
     this.game.sound.play("TheShadow");
     waitTime = 9000;
-  } else if (![13, 14].includes(PrinceJS.currentLevel)) {
+  } else if (![13, 14].includes(levelNumber)) {
     this.game.sound.play("Prince");
     waitTime = 13000;
   }
   let currentLevel = PrinceJS.currentLevel;
   this.onLevelFinished.dispatch(currentLevel);
-  PrinceJS.Utils.delayed(() => {
-    this.onNextLevel.dispatch(currentLevel);
-  }, waitTime);
+  PrinceJS.Utils.gameDelayed(
+    this.game,
+    () => {
+      this.onNextLevel.dispatch(currentLevel);
+    },
+    waitTime
+  );
 };
 
 PrinceJS.Kid.prototype.showShadowOverlay = function () {
@@ -231,33 +238,37 @@ PrinceJS.Kid.prototype.drinkPotion = function () {
   if (tile.isSpecial) {
     return;
   }
-  PrinceJS.Utils.delayed(() => {
-    switch (potionType) {
-      case PrinceJS.Level.POTION_RECOVER:
-        PrinceJS.Utils.flashRedPotion(this.game);
-        this.game.sound.play("Potion1");
-        this.recoverLife();
-        break;
-      case PrinceJS.Level.POTION_ADD:
-        PrinceJS.Utils.flashRedPotion(this.game);
-        this.game.sound.play("Potion2");
-        this.addLife();
-        break;
-      case PrinceJS.Level.POTION_BUFFER:
-        PrinceJS.Utils.flashGreenPotion(this.game);
-        this.floatFall();
-        break;
-      case PrinceJS.Level.POTION_FLIP:
-        this.flipScreen();
-        break;
-      case PrinceJS.Level.POTION_DAMAGE:
-        PrinceJS.Utils.flashRedDamage(this.game);
-        this.game.sound.play("StabbedByOpponent");
-        this.damageLife();
-        break;
-    }
-    this.allowCrawl = true;
-  }, 1000);
+  PrinceJS.Utils.gameDelayed(
+    this.game,
+    () => {
+      switch (potionType) {
+        case PrinceJS.Level.POTION_RECOVER:
+          PrinceJS.Utils.flashRedPotion(this.game);
+          this.game.sound.play("Potion1");
+          this.recoverLife();
+          break;
+        case PrinceJS.Level.POTION_ADD:
+          PrinceJS.Utils.flashRedPotion(this.game);
+          this.game.sound.play("Potion2");
+          this.addLife();
+          break;
+        case PrinceJS.Level.POTION_BUFFER:
+          PrinceJS.Utils.flashGreenPotion(this.game);
+          this.floatFall();
+          break;
+        case PrinceJS.Level.POTION_FLIP:
+          this.flipScreen();
+          break;
+        case PrinceJS.Level.POTION_DAMAGE:
+          PrinceJS.Utils.flashRedDamage(this.game);
+          this.game.sound.play("StabbedByOpponent");
+          this.damageLife();
+          break;
+      }
+      this.allowCrawl = true;
+    },
+    1000
+  );
 };
 
 PrinceJS.Kid.prototype.gotSword = function () {
@@ -271,6 +282,12 @@ PrinceJS.Kid.prototype.gotSword = function () {
 };
 
 PrinceJS.Kid.prototype.updateTimer = function () {
+  if (this.inFloatTicks > 0) {
+    this.inFloatTicks--;
+    if (this.inFloatTicks === 0) {
+      this.endFloatFall();
+    }
+  }
   if (this.bumpTimer > 0) {
     this.bumpTimer--;
   }
@@ -285,6 +302,7 @@ PrinceJS.Kid.prototype.updateTimer = function () {
 };
 
 PrinceJS.Kid.prototype.updateBehaviour = function () {
+  this.inputTick++;
   if (this.x === 0 && this.y === 0) {
     return;
   }
@@ -687,9 +705,13 @@ PrinceJS.Kid.prototype.grab = function (x) {
   }
 
   this.grabWait = true;
-  PrinceJS.Utils.delayed(() => {
-    this.grabWait = false;
-  }, 500);
+  PrinceJS.Utils.gameDelayed(
+    this.game,
+    () => {
+      this.grabWait = false;
+    },
+    500
+  );
 };
 
 PrinceJS.Kid.prototype.checkBarrier = function () {
@@ -1026,7 +1048,7 @@ PrinceJS.Kid.prototype.checkFloor = function () {
             break;
 
           case PrinceJS.Level.TILE_SPIKES:
-            if (this.inSpikeDistance(tile)) {
+            if (PrinceJS.Utils.isHarmfulSpikes(tile) && this.inSpikeDistance(tile)) {
               if (
                 (tile.state !== PrinceJS.Tile.Spikes.STATE_FULL_OUT &&
                   ["running", "runjump", "runturn"].includes(this.action)) ||
@@ -1107,7 +1129,8 @@ PrinceJS.Kid.prototype.changeRoomDown = function () {
       this.room = room;
     } else if (this.charBlockX >= 9) {
       room = this.level.rooms[this.room].links.right;
-      room = this.level.rooms[room].links.down;
+      // No room to the right means nothing below either: the kid falls out of the level (DOS fell_out).
+      room = room > 0 && this.level.rooms[room] ? this.level.rooms[room].links.down : 0;
       if (room > 0) {
         this.charX -= 140;
         this.baseX += 320;
@@ -1195,16 +1218,7 @@ PrinceJS.Kid.prototype.tryPickup = function () {
   }
 };
 
-PrinceJS.Kid.COMBAT_ACTIONS = [
-  "engarde",
-  "advance",
-  "retreat",
-  "strike",
-  "block",
-  "striketoblock",
-  "blocktostrike",
-  "blockedstrike"
-];
+PrinceJS.Kid.INPUT_LATCH_TICKS = 1;
 
 PrinceJS.Kid.prototype.bindKeyBuffer = function () {
   const bind = (key, dirs) => {
@@ -1252,7 +1266,8 @@ PrinceJS.Kid.prototype.bufferKeyPress = function (dir) {
   if (!this.keyBuffer) {
     return;
   }
-  this.keyBuffer[dir] = Date.now();
+  // Remember the tick in which the key went down (see hasBufferedKey).
+  this.keyBuffer[dir] = this.inputTick + 1;
   if (dir === "U") {
     this.allowBlock = true;
   } else if (dir === "S") {
@@ -1273,12 +1288,14 @@ PrinceJS.Kid.prototype.bufferKeyPress = function (dir) {
 };
 
 PrinceJS.Kid.prototype.hasBufferedKey = function (dir) {
+  // DOS reads the held key state once per frame; it has no input buffer. SDLPoP's
+  // fix_register_quick_input (KEYSTATE_HELD_NEW) only keeps a key that was pressed and released
+  // between two frames alive for the next frame. A tap therefore counts for exactly one tick:
+  // the first updateBehaviour after the key went down, in and out of combat alike.
   if (!this.keyBuffer || !this.keyBuffer[dir]) {
     return false;
   }
-  let inCombat = (dir === "U" || dir === "S") && PrinceJS.Kid.COMBAT_ACTIONS.includes(this.action);
-  let ttl = inCombat ? 700 : 200;
-  if (Date.now() - this.keyBuffer[dir] <= ttl) {
+  if (this.inputTick - this.keyBuffer[dir] < PrinceJS.Kid.INPUT_LATCH_TICKS) {
     return true;
   }
   this.keyBuffer[dir] = 0;
@@ -1540,7 +1557,7 @@ PrinceJS.Kid.prototype.land = function () {
   this.stopFall();
 
   let tile = this.level.getTileAt(this.charBlockX, this.charBlockY, this.room);
-  if (tile.element === PrinceJS.Level.TILE_SPIKES) {
+  if (PrinceJS.Utils.isHarmfulSpikes(tile)) {
     this.game.sound.play("SpikedBySpikes"); // HardLandingSplat
     this.alignToTile(tile);
     this.dieSpikes();
@@ -1972,29 +1989,23 @@ PrinceJS.Kid.prototype.flipScreen = function () {
   this.onFlipped.dispatch();
 };
 
+PrinceJS.Kid.FEATHER_FALL_TICKS = 225; // DOS: is_feather_fall > 225 (≈ 18.75 s at 12 fps)
+
 PrinceJS.Kid.prototype.floatFall = function () {
-  if (this.inFloatTimeoutCancel !== null) {
-    this.inFloatTimeoutCancel();
-    this.inFloatTimeoutCancel = null;
-  }
   this.inFloat = true;
+  this.inFloatTicks = PrinceJS.Kid.FEATHER_FALL_TICKS;
   this.game.sound.play("Float");
-  let handle = PrinceJS.Utils.delayedCancelable(() => {
-    this.inFloat = false;
-    this.inFloatTimeoutCancel = null;
-    this.fallingBlocks = 0;
-  }, 18000);
-  this.inFloatTimeoutCancel = handle.cancel;
+};
+
+PrinceJS.Kid.prototype.endFloatFall = function () {
+  this.inFloat = false;
+  this.inFloatTicks = 0;
+  this.fallingBlocks = 0;
 };
 
 PrinceJS.Kid.prototype.toggleFloatFall = function () {
   if (this.inFloat) {
-    if (this.inFloatTimeoutCancel !== null) {
-      this.inFloatTimeoutCancel();
-      this.inFloatTimeoutCancel = null;
-    }
-    this.inFloat = false;
-    this.fallingBlocks = 0;
+    this.endFloatFall();
     return false;
   }
   this.floatFall();
@@ -2067,14 +2078,18 @@ PrinceJS.Kid.prototype.revive = function () {
 };
 
 PrinceJS.Kid.prototype.proceedOnDead = function () {
-  PrinceJS.Utils.delayed(() => {
-    if (this.game && !this.alive) {
-      if (this.opponent && this.opponent.baseCharName === "jaffar") {
-        this.game.sound.play("HeroicDeath");
-      } else {
-        this.game.sound.play("Accident");
+  PrinceJS.Utils.gameDelayed(
+    this.game,
+    () => {
+      if (this.game && !this.alive) {
+        if (this.opponent && this.opponent.baseCharName === "jaffar") {
+          this.game.sound.play("HeroicDeath");
+        } else {
+          this.game.sound.play("Accident");
+        }
+        this.onDead.dispatch();
       }
-      this.onDead.dispatch();
-    }
-  }, 1000);
+    },
+    1000
+  );
 };

@@ -19,6 +19,14 @@ PrinceJS.Game.prototype = {
     this.game.load.audio("JaffarDead", "assets/music/20_Jaffar_Dead.mp3");
     this.game.load.audio("HeroicDeath", "assets/music/13_Heroic_Death.mp3");
 
+    // Drop the previous level from the cache, so a missing map is detected in create()
+    // instead of silently reusing the last loaded one.
+    if (this.game.cache.checkJSONKey && this.game.cache.checkJSONKey("level")) {
+      this.game.cache.removeJSON("level");
+    }
+    if (!PrinceJS.Utils.isPlayableLevel(PrinceJS.currentLevel)) {
+      return;
+    }
     let levelBasePath = PrinceJS.currentLevel < 90 ? "assets/maps/" : "assets/maps/custom/";
     this.load.json("level", levelBasePath + "level" + PrinceJS.currentLevel + ".json");
   },
@@ -26,15 +34,13 @@ PrinceJS.Game.prototype = {
   create: function () {
     this.game.sound.stopAll();
 
+    // The Game state object is reused between levels: start from a clean slate.
+    this.enemies = [];
+    this.kid = null;
+    this.timeIsUp = false;
     this.continueTimer = -1;
     this.pressButtonToContinueTimer = -1;
     this.pressButtonToNext = false;
-
-    if (!PrinceJS.startTime) {
-      let date = new Date();
-      date.setMinutes(date.getMinutes() - (60 - PrinceJS.minutes));
-      PrinceJS.startTime = date;
-    }
 
     let json = this.game.cache.getJSON("level");
     if (!json) {
@@ -42,6 +48,15 @@ PrinceJS.Game.prototype = {
       return;
     }
     this.level = new PrinceJS.LevelBuilder(this.game, this).buildFromJSON(json);
+
+    // DOS show_time: the clock only runs during play (not in cutscenes / while dead) and not on
+    // level 14 (current_level < 13, or 13 until Jaffar is defeated; never from 14 on).
+    PrinceJS.Utils.releaseTimer("state");
+    PrinceJS.Utils.releaseTimer("dead");
+    PrinceJS.Utils.setTimerHold("level", PrinceJS.Utils.levelNumber(this.level) >= 14);
+    if (!PrinceJS.startTime) {
+      PrinceJS.Utils.setRemainingTime(PrinceJS.minutes);
+    }
     this.specialEvents = json.prince.specialEvents !== false;
     this.playDanger = json.prince.danger !== false;
 
@@ -93,11 +108,18 @@ PrinceJS.Game.prototype = {
     if (typeof json.prince.sword === "boolean") {
       this.kid.hasSword = json.prince.sword;
     }
+    // currentHealth is a one-shot hand-over (seamless 12→13 transition, megahit load). A later
+    // restart of this level starts with full health again (DOS: hitp_curr = hitp_beg_lev).
+    PrinceJS.currentHealth = null;
     if (turn) {
       this.kid.charX += 7;
-      PrinceJS.Utils.delayed(() => {
-        this.kid.action = "turn";
-      }, 100);
+      PrinceJS.Utils.gameDelayed(
+        this.game,
+        () => {
+          this.kid.action = "turn";
+        },
+        100
+      );
     }
     this.kid.charX += json.prince.offset || 0;
 
@@ -179,42 +201,79 @@ PrinceJS.Game.prototype = {
   },
 
   update: function () {
-    if (PrinceJS.Utils.continueGame(this.game)) {
-      this.buttonPressed();
-      let pos = PrinceJS.Utils.effectivePointer(this.game);
-      let size = PrinceJS.Utils.effectiveScreenSize(this.game);
-      if (
-        (PrinceJS.Utils.isScreenFlipped() && pos.y >= 0 && pos.y <= 0.04 * size.height) ||
-        (!PrinceJS.Utils.isScreenFlipped() && pos.y >= 0.96 * size.height && pos.y <= size.height)
-      ) {
-        if (this.isRemainingMinutesShown() || this.isLevelShown()) {
-          if (pos.x >= 0 && pos.x <= 0.2 * size.width) {
-            this.previousLevel(PrinceJS.currentLevel, true);
-          } else if (pos.x >= 0.8 * size.width && pos.x <= size.width) {
-            this.nextLevel(PrinceJS.currentLevel, true, true);
-          } else if (pos.x >= 0.4 * size.width && pos.x <= 0.6 * size.width) {
-            this.restartLevel(true);
-          }
-        }
-        if (pos.x >= 0 && pos.x <= size.width) {
-          this.showRemainingMinutes();
+    if (!this.kid) {
+      return;
+    }
+    // Touch: a released pointer is the "button"; only a real pointer release may hit the strip.
+    if (PrinceJS.Utils.pointerPressed(this.game)) {
+      this.continuePressed();
+      this.handlePointerStrip();
+    }
+    // Gamepad: face/shoulder buttons are the "button" (never the D-pad or +/-).
+    if (PrinceJS.Utils.gamepadContinuePressed(this.game)) {
+      this.continuePressed();
+    }
+    if (PrinceJS.Utils.gamepadInfoPressed(this.game)) {
+      if (this.isRemainingMinutesShown() || this.isLevelShown()) {
+        this.restartLevel(true);
+      } else {
+        this.showRemainingMinutes();
+      }
+    } else if (PrinceJS.Utils.gamepadPreviousPressed(this.game)) {
+      this.requestPreviousLevel();
+    } else if (PrinceJS.Utils.gamepadNextPressed(this.game)) {
+      this.requestNextLevel();
+    }
+  },
+
+  handlePointerStrip: function () {
+    let pos = PrinceJS.Utils.effectivePointer(this.game);
+    let size = PrinceJS.Utils.effectiveScreenSize(this.game);
+    if (
+      (PrinceJS.Utils.isScreenFlipped() && pos.y >= 0 && pos.y <= 0.04 * size.height) ||
+      (!PrinceJS.Utils.isScreenFlipped() && pos.y >= 0.96 * size.height && pos.y <= size.height)
+    ) {
+      if (this.isRemainingMinutesShown() || this.isLevelShown()) {
+        if (pos.x >= 0 && pos.x <= 0.2 * size.width) {
+          this.requestPreviousLevel();
+        } else if (pos.x >= 0.8 * size.width && pos.x <= size.width) {
+          this.requestNextLevel();
+        } else if (pos.x >= 0.4 * size.width && pos.x <= 0.6 * size.width) {
+          this.restartLevel(true);
         }
       }
-      if (PrinceJS.Utils.gamepadInfoPressed(this.game)) {
-        if (this.isRemainingMinutesShown() || this.isLevelShown()) {
-          this.restartLevel(true);
-        } else {
-          this.showRemainingMinutes();
-        }
-      } else if (PrinceJS.Utils.gamepadPreviousPressed(this.game)) {
-        this.previousLevel(PrinceJS.currentLevel, true);
-      } else if (PrinceJS.Utils.gamepadNextPressed(this.game)) {
-        this.nextLevel(PrinceJS.currentLevel, true, true);
+      if (pos.x >= 0 && pos.x <= size.width) {
+        this.showRemainingMinutes();
       }
     }
   },
 
+  // DOS Shift+L: only on levels 1-3 (or with cheats); without cheats the time is cut to 15 minutes.
+  // Keyboard, gamepad (+) and the touch strip all go through this rule.
+  canSkipLevel: function () {
+    return PrinceJS.megahit || PrinceJS.Utils.levelNumber(this.level) < 4;
+  },
+
+  requestNextLevel: function () {
+    if (!this.canSkipLevel()) {
+      return false;
+    }
+    this.nextLevel(PrinceJS.currentLevel, true, PrinceJS.megahit);
+    return true;
+  },
+
+  // There is no DOS key for going back a level: cheat mode only.
+  requestPreviousLevel: function () {
+    if (!PrinceJS.megahit) {
+      return false;
+    }
+    this.previousLevel(PrinceJS.currentLevel, true);
+    return true;
+  },
+
   updateWorld: function () {
+    // DOS show_time: no time passes once the kid is dead (Kid.alive >= 0).
+    PrinceJS.Utils.setTimerHold("dead", !this.kid.alive);
     this.level.update();
     this.kid.updateActor();
     for (let i = 0; i < this.enemies.length; i++) {
@@ -245,9 +304,13 @@ PrinceJS.Game.prototype = {
         if (this.firstUpdate) {
           this.level.fireEvent(8, PrinceJS.Level.TILE_DROP_BUTTON);
           if (PrinceJS.danger) {
-            PrinceJS.Utils.delayed(() => {
-              this.game.sound.play("Danger");
-            }, 800);
+            PrinceJS.Utils.gameDelayed(
+              this.game,
+              () => {
+                this.game.sound.play("Danger");
+              },
+              800
+            );
           }
         }
         break;
@@ -281,16 +344,20 @@ PrinceJS.Game.prototype = {
           }
           if (skeleton.room === 3 && skeleton.setCharForRoom !== skeleton.room) {
             skeleton.setCharForRoom = skeleton.room;
-            PrinceJS.Utils.delayed(() => {
-              if (skeleton.charFace === -1) {
-                skeleton.turn();
-              }
-              skeleton.room = 3;
-              skeleton.charX = PrinceJS.Utils.convertBlockXtoX(4);
-              skeleton.charY = PrinceJS.Utils.convertBlockYtoY(1);
-              skeleton.action = "stand";
-              this.kid.sheathe();
-            }, 100);
+            PrinceJS.Utils.gameDelayed(
+              this.game,
+              () => {
+                if (skeleton.charFace === -1) {
+                  skeleton.turn();
+                }
+                skeleton.room = 3;
+                skeleton.charX = PrinceJS.Utils.convertBlockXtoX(4);
+                skeleton.charY = PrinceJS.Utils.convertBlockYtoY(1);
+                skeleton.action = "stand";
+                this.kid.sheathe();
+              },
+              100
+            );
           }
           if (skeleton.room === 3 && skeleton.charBlockY === 1 && skeleton.charX <= 45 && !skeleton.inFallDown) {
             skeleton.charX = 55;
@@ -321,9 +388,13 @@ PrinceJS.Game.prototype = {
           !this.level.mirrorDetected
         ) {
           this.level.mirrorDetected = true;
-          PrinceJS.Utils.delayed(() => {
-            this.game.sound.play("Danger");
-          }, 100);
+          PrinceJS.Utils.gameDelayed(
+            this.game,
+            () => {
+              this.game.sound.play("Danger");
+            },
+            100
+          );
         }
         tile = this.level.getTileAt(this.kid.charBlockX - this.kid.charFace, this.kid.charBlockY, this.kid.room);
         if (
@@ -402,21 +473,22 @@ PrinceJS.Game.prototype = {
         }
         if (this.currentCameraRoom === 1 && this.kid.charBlockY === 2 && this.kid.charY >= 185) {
           this.blockCamera = true;
-          PrinceJS.Utils.delayed(() => {
-            this.nextLevel(PrinceJS.currentLevel);
-          }, 100);
+          PrinceJS.Utils.gameDelayed(
+            this.game,
+            () => {
+              this.nextLevel(PrinceJS.currentLevel);
+            },
+            100
+          );
         }
         break;
 
       case 8:
-        if (this.level.exitDoorOpen && this.currentCameraRoom === 16 && this.kid.charBlockY === 0) {
-          if (!this.level.waitForMouse) {
-            this.level.waitForMouse = true;
-            PrinceJS.Utils.delayed(() => {
-              this.level.waitedForMouse = true;
-            }, 12500);
-          }
-          if (this.level.waitedForMouse && !this.mouse) {
+        // DOS timers(): while the kid is in room 16 with the level door open, leveldoor_open counts
+        // frames; the mouse comes at 150 (12.5 s). Leaving the room pauses the count.
+        if (this.level.exitDoorOpen && this.kid.room === 16 && !this.mouse) {
+          this.level.mouseTicks = (this.level.mouseTicks || 0) + 1;
+          if (this.level.mouseTicks >= PrinceJS.Game.MOUSE_DELAY_TICKS) {
             this.mouse = new PrinceJS.Mouse(this.game, this.level, 16, 9, -1);
             this.performProgram(
               [
@@ -455,12 +527,16 @@ PrinceJS.Game.prototype = {
             this.shadow.charY = PrinceJS.Utils.convertBlockYtoY(1);
             this.shadow.setVisible();
             this.shadow.setActive();
-            PrinceJS.Utils.delayed(() => {
-              this.shadow.refracTimer = 9;
-              this.shadow.opponent = this.kid;
-              this.kid.opponent = this.shadow;
-              this.kid.opponentSync = true;
-            }, 1000);
+            PrinceJS.Utils.gameDelayed(
+              this.game,
+              () => {
+                this.shadow.refracTimer = 9;
+                this.shadow.opponent = this.kid;
+                this.kid.opponent = this.shadow;
+                this.kid.opponentSync = true;
+              },
+              1000
+            );
           }
           if (
             !this.shadow.active &&
@@ -476,9 +552,13 @@ PrinceJS.Game.prototype = {
             this.kid.showShadowOverlay();
             this.kid.flashShadowOverlay();
             PrinceJS.Utils.flashWhiteShadowMerge(this.game);
-            PrinceJS.Utils.delayed(() => {
-              this.game.sound.play("Prince");
-            }, 2000);
+            PrinceJS.Utils.gameDelayed(
+              this.game,
+              () => {
+                this.game.sound.play("Prince");
+              },
+              2000
+            );
           }
         }
         if (this.level.leapOfFaith && !this.level.leapOfFaithSetup && this.level.rooms[2]) {
@@ -520,21 +600,15 @@ PrinceJS.Game.prototype = {
             }
           }
         });
-        jaffar = this.kid.opponent && this.kid.opponent.baseCharName === "jaffar" ? this.kid.opponent : null;
-        if (jaffar) {
-          if (!jaffar.alive && !PrinceJS.endTime) {
-            PrinceJS.endTime = new Date();
+        // Found among all enemies (not via kid.opponent, which is cleared when the opponent dies
+        // while en garde, e.g. by the megahit K cheat).
+        jaffar = this.enemies.find((enemy) => enemy && enemy.baseCharName === "jaffar");
+        if (jaffar && !jaffar.alive && !this.level.jaffarDefeated) {
+          // DOS on_guard_killed: leveldoor_open = 2 stops the clock and shows the remaining time.
+          this.level.jaffarDefeated = true;
+          if (!PrinceJS.endTime) {
+            PrinceJS.endTime = new Date(PrinceJS.Utils.timerNow());
             this.showRemainingMinutes();
-          }
-          if (!jaffar.alive && !this.level.triggerOpenExitDoor) {
-            this.level.triggerOpenExitDoor = true;
-            PrinceJS.Utils.delayed(() => {
-              let button = this.level.getTileAt(0, 0, 24);
-              if (button.element === PrinceJS.Level.TILE_RAISE_BUTTON) {
-                button.mute = true;
-                button.push();
-              }
-            }, 7000);
           }
         }
         break;
@@ -590,7 +664,7 @@ PrinceJS.Game.prototype = {
             fn = operation.i;
             break;
         }
-        return PrinceJS.Utils.perform(fn, operation.p1);
+        return PrinceJS.Utils.gamePerform(this.game, fn, operation.p1);
       });
     }, Promise.resolve());
   },
@@ -605,6 +679,11 @@ PrinceJS.Game.prototype = {
       }
     }
     if (this.pressButtonToContinueTimer > -1) {
+      // DOS reads the held Shift state (control_shift): holding it restarts as soon as allowed.
+      if (this.kid && this.kid.shiftKey && this.kid.shiftKey.isDown) {
+        this.continueAfterDeath();
+        return;
+      }
       this.pressButtonToContinueTimer--;
       if (this.pressButtonToContinueTimer === 0) {
         this.pressButtonToContinueTimer = -1;
@@ -650,12 +729,7 @@ PrinceJS.Game.prototype = {
     if (!event.shiftKey || event.ctrlKey) {
       return;
     }
-
-    if (!PrinceJS.megahit && PrinceJS.currentLevel > 3 && PrinceJS.currentLevel < 90) {
-      return;
-    }
-
-    this.nextLevel(undefined, true, PrinceJS.megahit);
+    this.requestNextLevel();
   },
 
   toggleMegahitEvent: function (event) {
@@ -830,13 +904,22 @@ PrinceJS.Game.prototype = {
 
   restartGame() {
     this.input.keyboard.onDownCallback = null;
+    this.enemies = [];
     PrinceJS.Restart();
     this.state.start("Title");
   },
 
   restartLevel(skipped = true) {
+    if (this.timeIsUp) {
+      return;
+    }
+    // DOS: restarting resets leveldoor_open, so on level 13 the clock runs again until Jaffar
+    // is defeated anew. Health is reset by Game.create (currentHealth was consumed there).
+    if (PrinceJS.Utils.levelNumber(this.level) === 13 && PrinceJS.endTime) {
+      PrinceJS.Utils.resumeEndTime();
+    }
     this.reset(true);
-    PrinceJS.skipShowLevel = [13, 14].includes(PrinceJS.currentLevel) && !skipped;
+    PrinceJS.skipShowLevel = [13, 14].includes(PrinceJS.Utils.levelNumberOf(PrinceJS.currentLevel)) && !skipped;
   },
 
   levelFinished() {
@@ -847,12 +930,23 @@ PrinceJS.Game.prototype = {
     if (triggerLevel !== undefined && triggerLevel !== PrinceJS.currentLevel) {
       return;
     }
+    if (this.timeIsUp) {
+      return;
+    }
 
+    let finishedLevelNumber = PrinceJS.Utils.levelNumber(this.level);
     PrinceJS.danger = null;
     PrinceJS.currentLevel++;
-    PrinceJS.currentHealth = PrinceJS.currentLevel === 13 ? this.kid.health : null;
-    PrinceJS.maxHealth = this.kid.maxHealth;
-    if (PrinceJS.currentLevel > 15 && PrinceJS.currentLevel < 90) {
+    // DOS: only the max HP carries over (hitp_beg_lev = hitp_max); the current HP is kept only on
+    // the seamless 12→13 transition, never when the level is skipped.
+    PrinceJS.currentHealth = !skipped && finishedLevelNumber === 12 && this.kid ? this.kid.health : null;
+    if (this.kid) {
+      PrinceJS.maxHealth = this.kid.maxHealth;
+    }
+    if (
+      (PrinceJS.currentLevel > 15 && PrinceJS.currentLevel < 90) ||
+      PrinceJS.currentLevel > PrinceJS.Utils.CUSTOM_LEVEL_LAST
+    ) {
       this.restartGame();
       return;
     }
@@ -861,30 +955,38 @@ PrinceJS.Game.prototype = {
       PrinceJS.Utils.setRemainingMinutesTo15();
     }
 
-    if (PrinceJS.currentLevel >= 100 && this.level.number === 14) {
+    if (PrinceJS.currentLevel >= 100 && finishedLevelNumber === 14) {
       PrinceJS.Utils.resetRemainingMinutesTo60();
     }
 
     this.reset();
-    PrinceJS.skipShowLevel = [13, 14].includes(PrinceJS.currentLevel) && !skipped;
+    PrinceJS.skipShowLevel = [13, 14].includes(PrinceJS.Utils.levelNumberOf(PrinceJS.currentLevel)) && !skipped;
   },
 
   previousLevel: function (triggerLevel, skipped = false) {
     if (triggerLevel !== undefined && triggerLevel !== PrinceJS.currentLevel) {
       return;
     }
-
-    PrinceJS.danger = null;
-    if (PrinceJS.currentLevel > 1) {
-      PrinceJS.currentLevel--;
+    if (this.timeIsUp) {
+      return;
     }
 
+    // Stay on the first level of the original game or of the custom levels (98 has no map).
+    if (!PrinceJS.Utils.isPlayableLevel(PrinceJS.currentLevel - 1)) {
+      return;
+    }
+    PrinceJS.danger = null;
+    PrinceJS.currentLevel--;
+
     this.reset();
-    PrinceJS.skipShowLevel = [13, 14].includes(PrinceJS.currentLevel) && !skipped;
+    PrinceJS.skipShowLevel = [13, 14].includes(PrinceJS.Utils.levelNumberOf(PrinceJS.currentLevel)) && !skipped;
   },
 
   handleDead: function () {
     if (this.kid && this.kid.alive) {
+      return;
+    }
+    if (this.continueTimer > -1 || this.pressButtonToContinueTimer > -1) {
       return;
     }
     this.continueTimer = 10;
@@ -899,10 +1001,19 @@ PrinceJS.Game.prototype = {
   },
 
   timeUp() {
-    PrinceJS.Utils.delayed(() => {
-      PrinceJS.currentLevel = 16;
-      this.state.start("Cutscene");
-    }, 1000);
+    // DOS expired(): the game is over, no restart or level change any more.
+    this.timeIsUp = true;
+    this.continueTimer = -1;
+    this.pressButtonToContinueTimer = -1;
+    this.pressButtonToNext = false;
+    PrinceJS.Utils.gameDelayed(
+      this.game,
+      () => {
+        PrinceJS.currentLevel = 16;
+        this.state.start("Cutscene");
+      },
+      1000
+    );
   },
 
   outOfRoom() {
@@ -910,26 +1021,37 @@ PrinceJS.Game.prototype = {
     this.handleDead();
   },
 
+  // Keyboard handler (Phaser onDownCallback, also called for key autorepeat).
   buttonPressed: function (event) {
-    if (
-      PrinceJS.megahit &&
-      this.kid &&
-      !this.kid.alive &&
-      event &&
-      event.keyCode === Phaser.Keyboard.R &&
-      !event.ctrlKey &&
-      !event.shiftKey &&
-      !event.altKey &&
-      !event.metaKey
-    ) {
+    if (event && event.repeat) {
       return;
     }
-    if (this.pressButtonToContinueTimer > -1) {
-      this.reset(true);
+    // DOS process_key: after death only Shift or Enter restarts the level ("Press Button").
+    if (this.pressButtonToContinueTimer > -1 && PrinceJS.Game.isContinueKey(event)) {
+      this.continueAfterDeath();
+      return;
     }
     if (this.pressButtonToNext) {
       this.nextLevel(PrinceJS.currentLevel);
     }
+  },
+
+  // Touch release or gamepad face button: the "button" of the DOS joystick.
+  continuePressed: function () {
+    if (this.pressButtonToContinueTimer > -1) {
+      this.continueAfterDeath();
+      return;
+    }
+    if (this.pressButtonToNext) {
+      this.nextLevel(PrinceJS.currentLevel);
+    }
+  },
+
+  continueAfterDeath: function () {
+    if (this.timeIsUp || this.pressButtonToContinueTimer < 0 || (this.kid && this.kid.alive)) {
+      return;
+    }
+    this.restartLevel(true);
   },
 
   reset: function (suppressCutscene) {
@@ -945,27 +1067,58 @@ PrinceJS.Game.prototype = {
     } else {
       this.state.start("Game");
     }
-    PrinceJS.skipShowLevel = [13, 14].includes(PrinceJS.currentLevel);
+    PrinceJS.skipShowLevel = [13, 14].includes(PrinceJS.Utils.levelNumberOf(PrinceJS.currentLevel));
   },
 
+  // The clock itself is held globally (Boot); here only the text is updated.
   onPause: function () {
     PrinceJS.Utils.updateQuery();
-    this.ui.showGamePaused();
+    if (this.ui) {
+      this.ui.showGamePaused();
+    }
   },
 
   onResume: function () {
-    PrinceJS.Utils.restoreQuery();
-    this.showRemainingMinutes(true);
+    if (this.ui) {
+      this.showRemainingMinutes(true);
+    }
   },
 
   changeRoom: function (room, cameraRoom) {
     this.peekRoom = null;
+    let previousRoom = this.currentRoom;
     this.setupCamera(room, cameraRoom);
     if (this.currentRoom === room) {
       return;
     }
+    this.checkJaffarExit(previousRoom, room);
     this.currentRoom = room;
     this.kid.flee = false;
+  },
+
+  // DOS Jaffar_exit (called from leave_room when leaving a room to the left): once Jaffar is
+  // defeated, the level door is opened by triggering the button in room 24.
+  checkJaffarExit: function (fromRoom, toRoom) {
+    if (
+      !this.specialEvents ||
+      PrinceJS.Utils.levelNumber(this.level) !== 13 ||
+      !this.level.jaffarDefeated ||
+      this.level.triggerOpenExitDoor ||
+      !(fromRoom > 0) ||
+      !(toRoom > 0) ||
+      !this.level.rooms[fromRoom] ||
+      this.level.rooms[fromRoom].links.left !== toRoom
+    ) {
+      return false;
+    }
+    let button = this.level.getTileAt(0, 0, 24);
+    if (!button || button.element !== PrinceJS.Level.TILE_RAISE_BUTTON) {
+      return false;
+    }
+    this.level.triggerOpenExitDoor = true;
+    button.mute = true;
+    button.push();
+    return true;
   },
 
   setCameraPosition: function (room) {
@@ -1061,6 +1214,8 @@ PrinceJS.Game.prototype = {
       if (this.kid.opponent !== currentEnemy) {
         this.kid.opponent = currentEnemy;
         this.kid.flee = false;
+        // DOS enter_guard: a guard that (re)becomes the opponent starts with guard_refrac = 0.
+        currentEnemy.refracTimer = 0;
       }
       currentEnemy.opponent = this.kid;
       currentEnemy.meet = true;
@@ -1102,9 +1257,28 @@ PrinceJS.Game.prototype = {
   },
 
   shutdown: function () {
+    // Outside of gameplay (level change, cutscenes, title) the DOS clock does not run.
+    PrinceJS.Utils.holdTimer("state");
+    if (this.game.onPause) {
+      this.game.onPause.remove(this.onPause, this);
+      this.game.onResume.remove(this.onResume, this);
+    }
+    this.enemies = [];
+    this.kid = null;
+    this.ui = null;
     if (typeof window !== "undefined" && this._cheatKeydownHandler) {
       window.removeEventListener("keydown", this._cheatKeydownHandler, true);
       this._cheatKeydownHandler = null;
     }
   }
+};
+
+PrinceJS.Game.MOUSE_DELAY_TICKS = 149; // DOS: leveldoor_open counts from 1 to custom->mouse_delay (150)
+
+PrinceJS.Game.isContinueKey = function (event) {
+  if (!event) {
+    return false;
+  }
+  let keyCode = event.keyCode;
+  return keyCode === 16 || keyCode === 13 || event.key === "Shift" || event.key === "Enter";
 };

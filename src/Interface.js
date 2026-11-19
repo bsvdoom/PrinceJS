@@ -125,11 +125,13 @@ PrinceJS.Interface.prototype = {
       return;
     }
     this.resetOpponentLive();
-    this.opp = actor;
 
+    // Only remember the opponent when a HP bar is actually shown, so an inactive guard
+    // (or a skeleton that later becomes active) gets its bar on a later call.
     if (!actor || !actor.active || actor.charName === "skeleton") {
       return;
     }
+    this.opp = actor;
 
     this.oppHPs = [];
     this.oppHPActive = actor.health;
@@ -159,9 +161,10 @@ PrinceJS.Interface.prototype = {
     for (let i = 0; i < this.oppHPs.length; i++) {
       this.oppHPs[i].destroy();
     }
-    this.opp.onDamageLife.removeAll();
-    this.opp.onDead.removeAll();
-    // this.opp.opponent = null;
+    // Remove only the UI's own listeners: the actor's own handlers (e.g. Enemy.resetRefracTimer,
+    // the DOS guard_refrac after every sword hit) must survive.
+    this.opp.onDamageLife.remove(this.damageOpponentLive, this);
+    this.opp.onDead.remove(this.resetOpponentLive, this);
     this.opp = null;
     this.oppHPs = [];
     this.oppHPActive = 0;
@@ -220,12 +223,16 @@ PrinceJS.Interface.prototype = {
     }
     this.showText("LEVEL " + PrinceJS.currentLevel, "level");
     this.hideTextTimer = 25;
-    PrinceJS.Utils.delayed(() => {
-      if (!this.showTextType || this.showTextType === "level") {
-        this.hideText();
-        this.showRegularRemainingTime(true);
-      }
-    }, 2000);
+    PrinceJS.Utils.gameDelayed(
+      this.game,
+      () => {
+        if (!this.showTextType || this.showTextType === "level") {
+          this.hideText();
+          this.showRegularRemainingTime(true);
+        }
+      },
+      2000
+    );
   },
 
   showRegularRemainingTime: function (force) {
@@ -234,6 +241,13 @@ PrinceJS.Interface.prototype = {
     }
     if (PrinceJS.Utils.getRemainingMinutes() === 0) {
       this.showRemainingSeconds();
+      let levelNumber = this.delegate && this.delegate.level ? this.delegate.level.number : PrinceJS.currentLevel;
+      if (levelNumber >= 13) {
+        // DOS: time only expires before level 13 (play_frame: current_level < 13 && rem_min == 0);
+        // on levels 13/14 the clock simply stops at zero.
+        PrinceJS.endTime = new Date(PrinceJS.Utils.timerNow());
+        return;
+      }
       this.delegate.timeUp();
       PrinceJS.startTime = null;
     } else if (PrinceJS.Utils.getRemainingMinutes() === 1) {
@@ -277,13 +291,17 @@ PrinceJS.Interface.prototype = {
   },
 
   showPressButtonToContinue: function () {
-    PrinceJS.Utils.delayed(() => {
-      if (this.player && this.player.alive) {
-        return;
-      }
-      this.showText("Press Button to Continue", "continue");
-      this.pressButtonToContinueTimer = 200;
-    }, 4000);
+    PrinceJS.Utils.gameDelayed(
+      this.game,
+      () => {
+        if (this.player && this.player.alive) {
+          return;
+        }
+        this.showText("Press Button to Continue", "continue");
+        this.pressButtonToContinueTimer = 200;
+      },
+      4000
+    );
   },
 
   showNotice: function (text) {

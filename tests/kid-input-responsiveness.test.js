@@ -169,36 +169,78 @@ function createKidHarness() {
   return { PrinceJS, kid, cursors, shiftKey };
 }
 
-test("Shift (strike) followed by quick Up tap blocks at end of strike (frame 157)", () => {
-  const { kid, cursors, shiftKey } = createKidHarness();
-  kid.action = "engarde";
-  kid.charFrame = 158;
-  kid.swordDrawn = true;
-
-  // Tap Shift -> strike
+function strikeToFrame157(kid, shiftKey) {
   shiftKey.tap();
   kid.updateBehaviour();
   assert.equal(kid.action, "strike");
   kid.processCommand();
   assert.equal(kid.charFrame, 151);
-
-  // Immediately tap & release Up while still in early strike
-  cursors.up.tap();
-
-  // Advance through strike frames 152..156
   for (const expectedFrame of [152, 153, 154, 155, 156]) {
     kid.updateBehaviour();
     assert.equal(kid.action, "strike");
     kid.processCommand();
     assert.equal(kid.charFrame, expectedFrame);
   }
-
-  // On frame 157 (last frame of strike), buffered Up triggers block
   kid.updateBehaviour();
   kid.processCommand();
   assert.equal(kid.charFrame, 157);
+}
+
+test("Shift (strike) with Up held blocks at end of strike (frame 157), like DOS control_up", () => {
+  const { kid, cursors, shiftKey } = createKidHarness();
+  kid.action = "engarde";
+  kid.charFrame = 158;
+  kid.swordDrawn = true;
+
+  // Press Up during the strike and keep holding it
+  shiftKey.tap();
+  kid.updateBehaviour();
+  assert.equal(kid.action, "strike");
+  kid.processCommand();
+  cursors.up.press();
+  for (let i = 0; i < 6; i++) {
+    kid.updateBehaviour();
+    kid.processCommand();
+  }
+  assert.equal(kid.charFrame, 157);
   kid.updateBehaviour();
   assert.equal(kid.action, "block");
+});
+
+test("DOS input latch: an Up tap released early in the strike is gone by frame 157", () => {
+  const { kid, cursors, shiftKey } = createKidHarness();
+  kid.action = "engarde";
+  kid.charFrame = 158;
+  kid.swordDrawn = true;
+
+  shiftKey.tap();
+  kid.updateBehaviour();
+  kid.processCommand();
+  // Tap & release Up while still in the early strike: it only counts for the next tick
+  cursors.up.tap();
+  for (let i = 0; i < 6; i++) {
+    kid.updateBehaviour();
+    assert.equal(kid.action, "strike");
+    kid.processCommand();
+  }
+  assert.equal(kid.charFrame, 157);
+  kid.updateBehaviour();
+  assert.equal(kid.action, "strike");
+});
+
+test("A tap between two ticks is registered on the next tick (SDLPoP quick input)", () => {
+  const { kid, shiftKey } = createKidHarness();
+  kid.action = "engarde";
+  kid.charFrame = 158;
+  kid.swordDrawn = true;
+  strikeToFrame157(kid, shiftKey);
+
+  // Shift tapped & released before the next tick still strikes on that tick
+  kid.action = "engarde";
+  kid.charFrame = 158;
+  shiftKey.tap();
+  kid.updateBehaviour();
+  assert.equal(kid.action, "strike");
 });
 
 test("Shift (strike) followed by quick Up tap triggers striketoblock when strike is blocked", () => {
@@ -224,7 +266,25 @@ test("Shift (strike) followed by quick Up tap triggers striketoblock when strike
   assert.equal(kid.action, "striketoblock");
 });
 
-test("Buffered Up press survives 1-tick deferral when opponent is on strike windup frame 18", () => {
+test("Held Up retries the block after the opponent's strike windup frame 18 (DOS parry)", () => {
+  const { kid, cursors } = createKidHarness();
+  kid.action = "engarde";
+  kid.charFrame = 158;
+  kid.swordDrawn = true;
+  kid.opponent.charFrame = 18;
+
+  cursors.up.press();
+  kid.updateBehaviour();
+  // Deferred because opponent is on frame 18
+  assert.equal(kid.action, "engarde");
+
+  // Next tick: opponent advances to frame 1; Up is still held and triggers block
+  kid.opponent.charFrame = 1;
+  kid.updateBehaviour();
+  assert.equal(kid.action, "block");
+});
+
+test("A released Up tap does not survive the frame 18 deferral (1-tick DOS latch)", () => {
   const { kid, cursors } = createKidHarness();
   kid.action = "engarde";
   kid.charFrame = 158;
@@ -233,22 +293,20 @@ test("Buffered Up press survives 1-tick deferral when opponent is on strike wind
 
   cursors.up.tap();
   kid.updateBehaviour();
-  // Deferred because opponent is on frame 18
   assert.equal(kid.action, "engarde");
 
-  // Next tick: opponent advances to frame 1; buffered Up still triggers block
   kid.opponent.charFrame = 1;
   kid.updateBehaviour();
-  assert.equal(kid.action, "block");
+  assert.equal(kid.action, "engarde");
 });
 
-test("Quick Shift tap during block windup (frame 169) triggers blocktostrike on frame 150", () => {
+test("Shift held during block windup (frame 169) triggers blocktostrike on frame 150", () => {
   const { kid, shiftKey } = createKidHarness();
   kid.action = "block";
   kid.processCommand();
   assert.equal(kid.charFrame, 169);
 
-  shiftKey.tap();
+  shiftKey.press();
   kid.updateBehaviour();
   assert.equal(kid.action, "block");
   kid.processCommand();

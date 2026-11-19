@@ -84,6 +84,13 @@ PrinceJS.Boot.prototype = {
     this.game.forceSingleUpdate = false;
 
     this.world.scale.set(PrinceJS.SCALE_FACTOR);
+
+    // DOS: the game clock does not run while paused. Registered once, independent of the state.
+    if (this.game.onPause && this.game.onResume) {
+      this.game.onPause.add(() => PrinceJS.Utils.holdTimer("pause"));
+      this.game.onResume.add(() => PrinceJS.Utils.releaseTimer("pause"));
+    }
+
     this.state.start("Preloader");
 
     PrinceJS.Utils.applyQuery();

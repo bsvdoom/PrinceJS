@@ -47,8 +47,12 @@ PrinceJS.Tile.Potion.prototype.removeObject = function () {
     this.decoration = undefined;
   }
   if (this.isSpecial) {
-    PrinceJS.Utils.delayed(() => {
-      this.onDrank.dispatch(this.specialModifier, PrinceJS.Level.TILE_RAISE_BUTTON);
-    }, 1000);
+    PrinceJS.Utils.gameDelayed(
+      this.game,
+      () => {
+        this.onDrank.dispatch(this.specialModifier, PrinceJS.Level.TILE_RAISE_BUTTON);
+      },
+      1000
+    );
   }
 };
